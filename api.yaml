@@ -1,0 +1,294 @@
+openapi: 3.0.3
+info:
+  title: Polymarket Gamma API
+  description: External API for Polymarket market data.
+  version: 1.0.0
+
+servers:
+  - url: https://gamma-api.polymarket.com
+    description: REST API server
+
+paths:
+  /events:
+    get:
+      summary: Fetch market events
+      description: Retrieve prediction market events with optional filtering.
+      operationId: listEvents
+      parameters:
+        - name: closed
+          in: query
+          description: Filter by open/closed status.
+          schema:
+            type: boolean
+            default: false
+        - name: tag_id
+          in: query
+          description: Filter by tag ID (for example, "102467" for 15-minute markets).
+          schema:
+            type: string
+        - name: slug
+          in: query
+          description: Filter by specific market slug.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of records to return.
+          schema:
+            type: integer
+            minimum: 1
+            default: 500
+        - name: offset
+          in: query
+          description: Number of records to skip.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Array of event objects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GammaEvent"
+
+  /series:
+    get:
+      summary: Fetch market series
+      description: Retrieve series groupings of related markets.
+      operationId: listSeries
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of records to return.
+          schema:
+            type: integer
+            minimum: 1
+            default: 100
+        - name: offset
+          in: query
+          description: Number of records to skip.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Array of series objects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GammaSeries"
+
+  /trades:
+    get:
+      summary: Fetch trade history
+      description: Retrieve trade history with optional market filters.
+      operationId: listTrades
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of records to return.
+          schema:
+            type: integer
+            minimum: 1
+            default: 500
+        - name: offset
+          in: query
+          description: Number of records to skip.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: market
+          in: query
+          description: One or more market condition IDs.
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+        - name: takerOnly
+          in: query
+          description: Return only taker-side trades.
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Array of trade records.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TradeRecord"
+
+  /internal/postgres/write:
+    servers:
+      - url: /
+        description: Same-origin API host (recommended for hosted Swagger UI).
+      - url: http://localhost:{port}
+        description: Internal API server for local development.
+        variables:
+          port:
+            default: "8000"
+            description: Internal API port.
+    post:
+      summary: Batch write to Postgres
+      description: Internal endpoint for transform_writer to persist data.
+      operationId: batchWritePostgres
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostgresWriteRequest"
+      responses:
+        "200":
+          description: Batch inserted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostgresWriteResponse"
+
+components:
+  schemas:
+    GammaEvent:
+      type: object
+      additionalProperties: true
+      description: Generic event object returned by /events.
+
+    GammaSeries:
+      type: object
+      additionalProperties: true
+      description: Generic series object returned by /series.
+
+    TradeRecord:
+      type: object
+      additionalProperties: true
+      description: Generic trade record returned by /trades.
+
+    PostgresWriteRequest:
+      type: object
+      required:
+        - table
+        - rows
+      properties:
+        table:
+          type: string
+          enum:
+            - chainlink_prices
+            - binance_prices
+            - kafka_price_changes
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    PostgresWriteResponse:
+      type: object
+      additionalProperties: true
+      description: Server response for a successful batch insert.
+
+    MarketSubscription:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - subscribe
+        market:
+          type: string
+          description: Market slug or token ID.
+        assets:
+          type: array
+          description: Asset/token IDs to subscribe to.
+          items:
+            type: string
+
+    LiveDataSubscription:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+            - subscribe
+        subscriptions:
+          type: array
+          items:
+            type: object
+            properties:
+              topic:
+                type: string
+              type:
+                type: string
+              filters:
+                type: string
+
+    ChainlinkPriceEvent:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: btc/usd
+        timestamp:
+          type: integer
+          format: int64
+        value:
+          type: number
+          format: double
+        payload:
+          type: object
+          additionalProperties: true
+
+    BinancePriceEvent:
+      type: object
+      properties:
+        symbol:
+          type: string
+        timestamp:
+          type: integer
+        value:
+          type: number
+
+    MarketEvent:
+      type: object
+      properties:
+        event_type:
+          type: string
+          enum:
+            - book
+            - price_change
+            - last_trade_price
+        asset_id:
+          type: string
+        timestamp:
+          type: integer
+
+x-websocket:
+  server:
+    url: wss://gamma-api.polymarket.com/ws
+    description: WebSocket endpoint for live market streams.
+  channels:
+    chainlink.crypto.prices:
+      description: Chainlink cryptocurrency price updates.
+      message:
+        $ref: "#/components/schemas/ChainlinkPriceEvent"
+    binance.crypto.prices:
+      description: Binance cryptocurrency price updates.
+      message:
+        $ref: "#/components/schemas/BinancePriceEvent"
+    markets.crypto.{slug}:
+      description: Market-specific order book and trade updates.
+      parameters:
+        slug:
+          description: Market slug identifier.
+      message:
+        $ref: "#/components/schemas/MarketEvent"
