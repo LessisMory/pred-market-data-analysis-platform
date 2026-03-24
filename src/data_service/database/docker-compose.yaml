@@ -1,0 +1,59 @@
+services:
+  postgres:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: persistence_postgres:latest
+    container_name: persistence_postgres
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_logical_replication_workers=10
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./schema:/schema:ro
+      - ./init/load_schema.sql:/docker-entrypoint-initdb.d/01_load_schema.sql:ro
+      - ./init/setup_cdc.sql:/docker-entrypoint-initdb.d/02_setup_cdc.sql:ro
+    networks:
+      - data_pipeline
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  data_initializer:
+    build:
+      context: ..
+      dockerfile: db/data_initialization/Dockerfile
+    image: data_initializer:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - REFRESH_INTERVAL_SECONDS=${REFRESH_INTERVAL_SECONDS:-43200}
+    networks:
+      - data_pipeline
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+
+networks:
+  data_pipeline:
+    name: data_pipeline
