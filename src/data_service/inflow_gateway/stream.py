@@ -14,6 +14,17 @@ import redis.asyncio as redis
 import requests
 import websockets
 
+
+def _get_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 GAMMA_EVENTS_URL = os.getenv(
     "GAMMA_EVENTS_URL", "https://gamma-api.polymarket.com/events"
 )
@@ -25,9 +36,9 @@ LIVE_DATA_WS_URL = os.getenv(
 )
 DEFAULT_MARKET_TAG = os.getenv("DEFAULT_MARKET_TAG", "102467")
 
-MARKET_DURATION_SECONDS = int(os.getenv("MARKET_DURATION_SECONDS", str(15 * 60)))
-MARKET_START_LEAD_SECONDS = int(os.getenv("MARKET_START_LEAD_SECONDS", str(1 * 60)))
-MARKET_STREAM_RETRIES = int(os.getenv("MARKET_STREAM_RETRIES", "3"))
+MARKET_DURATION_SECONDS = _get_int("MARKET_DURATION_SECONDS", 15 * 60)
+MARKET_START_LEAD_SECONDS = _get_int("MARKET_START_LEAD_SECONDS", 1 * 60)
+MARKET_STREAM_RETRIES = _get_int("MARKET_STREAM_RETRIES", 3)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 CHAINLINK_REDIS_CHANNEL = os.getenv(
