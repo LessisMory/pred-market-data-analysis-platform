@@ -35,7 +35,7 @@ services:
   data_initializer:
     build:
       context: ..
-      dockerfile: db/data_initialization/Dockerfile
+      dockerfile: database/data_initialization/Dockerfile
     image: data_initializer:latest
     depends_on:
       postgres:
