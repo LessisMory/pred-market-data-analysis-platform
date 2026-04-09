@@ -133,12 +133,12 @@ const RegisterScreen = () => {
     }
   };
 
-  // POST /v1/auth/verify-sms — confirm phone ownership, finalize account and redirect
+  // POST /v1/auth/verify-mfa — confirm phone ownership, finalize account and redirect
   const handleFinalize = async () => {
     const mfaCode = smsCode.join("");
 
     // try {
-    //   const res = await fetch('https://api.yourbackend.com/v1/auth/verify-sms', {
+    //   const res = await fetch('https://api.yourbackend.com/v1/auth/verify-mfa', {
     //     method: 'POST',
     //     headers: { 'Content-Type': 'application/json' },
     //     body: JSON.stringify({ email: formData.email, phone: formData.phone, code: mfaCode })

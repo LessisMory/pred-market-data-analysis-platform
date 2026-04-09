@@ -370,7 +370,7 @@ const AdminScreen = () => {
     }
   }, []);
 
-  // GET /api/analytics/admin/users — load full user list (admin token required)
+  // GET /api/analytics/admin/users — CONFIRM PATH with backend (not in current API table)
   useEffect(() => {
     // try {
     //   const res = await fetch('https://api.yourbackend.com/api/analytics/admin/users', {
@@ -382,7 +382,7 @@ const AdminScreen = () => {
     setTimeout(() => setIsLoading(false), 400);
   }, []);
 
-  // PATCH /api/analytics/admin/users/:id/status — toggle active/disabled state
+  // PATCH /api/analytics/admin/users/:id/status — CONFIRM PATH with backend
   const handleToggleStatus = async (userId) => {
     // try {
     //   const user = users.find(u => u.id === userId);
@@ -401,7 +401,7 @@ const AdminScreen = () => {
     ));
   };
 
-  // POST /api/analytics/admin/users/:id/reset-password — trigger password reset email
+  // POST /api/analytics/admin/users/:id/reset-password — CONFIRM PATH with backend
   const handleResetPassword = async (user) => {
     // try {
     //   await fetch(`https://api.yourbackend.com/api/analytics/admin/users/${user.id}/reset-password`, {
