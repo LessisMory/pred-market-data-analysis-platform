@@ -1,0 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+/* ── Reset ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+body {
+  background: #0a0e14;
+  color: #c9d8e8;
+  font-family: 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+input, button, select, textarea {
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 6px; height: 6px; }
+::-webkit-scrollbar-track  { background: #0a0e14; }
+::-webkit-scrollbar-thumb  { background: #1e2d3d; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #4a6070; }
+
+/* ── Typography helpers ──────────────────────────────────────────────────── */
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* ── Select element reset ────────────────────────────────────────────────── */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+select option {
+  background: #111820;
+  color: #c9d8e8;
+}
+
+/* ── Datetime-local input ────────────────────────────────────────────────── */
+input[type="datetime-local"] {
+  color-scheme: dark;
+}
+
+/* ── Number input — hide spin arrows ─────────────────────────────────────── */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] { -moz-appearance: textfield; }
+
+/* ── Checkbox accent ─────────────────────────────────────────────────────── */
+input[type="checkbox"] {
+  accent-color: #00d084;
+  cursor: pointer;
+}
+
+/* ── Focus ring — keyboard accessibility ─────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #00d084;
+  outline-offset: 2px;
+}
+
+/* ── Button reset ────────────────────────────────────────────────────────── */
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+/* ── Prevent text selection on interactive cards ─────────────────────────── */
+[role="button"],
+[onClick] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Spinner keyframe (used by loading states) ───────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Row highlight keyframe (used by history.js new-transaction flash) ────── */
+@keyframes highlightRow {
+  0%   { background-color: rgba(0, 208, 132, 0.15); }
+  100% { background-color: transparent; }
+}
