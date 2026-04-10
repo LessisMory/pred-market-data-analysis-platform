@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 
-def _split_env(value: str | None, default: List[str]) -> List[str]:
+def _split_env(value: Optional[str], default: List[str]) -> List[str]:
     if not value:
         return default
     return [token.strip() for token in value.split(",") if token.strip()]
@@ -63,6 +63,9 @@ class PostgresSettings:
     )
     order_book_snapshots_table: str = os.getenv(
         "ORDER_BOOK_SNAPSHOTS_TABLE", "order_book_snapshots"
+    )
+    order_book_trades_table: str = os.getenv(
+        "ORDER_BOOK_TRADES_TABLE", "order_book_trades"
     )
     chainlink_table: str = os.getenv("CHAINLINK_TABLE", "chainlink_prices")
     binance_table: str = os.getenv("BINANCE_TABLE", "binance_prices")
