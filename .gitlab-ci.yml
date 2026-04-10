@@ -1,0 +1,90 @@
+include:
+  - template: Jobs/SAST.gitlab-ci.yml
+
+stages:
+  - test
+  - build
+
+default:
+  interruptible: true
+
+variables:
+  API_DIR: "src/data_service/api"
+  DATA_SERVICE_DIR: "src/data_service"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  DOCKER_BUILDKIT: "1"
+  SAST_EXCLUDED_PATHS: "docs,venv,src/data_service/api/tests,src/data_service/database,src/data_service/inflow_gateway,src/data_service/shared,src/data_service/transform_layer,src/data_service/tests"
+
+cache:
+  key: "$CI_JOB_NAME"
+  paths:
+    - .cache/pip
+
+.api_branch_or_mr_changes: &api_branch_or_mr_changes
+  - if: '$CI_PIPELINE_SOURCE == "push"'
+    changes:
+      - .gitlab-ci.yml
+      - src/data_service/api/*
+      - src/data_service/api/**/*
+  - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    changes:
+      - .gitlab-ci.yml
+      - src/data_service/api/*
+      - src/data_service/api/**/*
+  - when: never
+
+.api_push_changes: &api_push_changes
+  - if: '$CI_PIPELINE_SOURCE == "push"'
+    changes:
+      - .gitlab-ci.yml
+      - src/data_service/api/*
+      - src/data_service/api/**/*
+  - when: never
+
+api_tests:
+  image: python:3.11-slim
+  stage: test
+  rules: *api_branch_or_mr_changes
+  before_script:
+    - python -m pip install --upgrade pip
+    - python -m pip install -r "$API_DIR/requirements-dev.txt"
+  script:
+    - python -m pytest "$API_DIR/tests" --junitxml=api-junit.xml --cov="$API_DIR" --cov-report=term-missing
+  artifacts:
+    when: always
+    reports:
+      junit: api-junit.xml
+    paths:
+      - api-junit.xml
+
+api_build_release:
+  image: docker:24.0.5-cli
+  stage: build
+  rules: *api_push_changes
+  needs:
+    - api_tests
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+  script:
+    - export LOCAL_IMAGE="data-service-api:${CI_COMMIT_SHORT_SHA}"
+    - docker build --pull -f "$API_DIR/Dockerfile" -t "$LOCAL_IMAGE" "$DATA_SERVICE_DIR"
+    - |
+      if [ -n "${CI_REGISTRY:-}" ] && [ -n "${CI_REGISTRY_USER:-}" ] && [ -n "${CI_REGISTRY_PASSWORD:-}" ] && [ -n "${CI_REGISTRY_IMAGE:-}" ]; then
+        export REMOTE_IMAGE="${CI_REGISTRY_IMAGE}/data-service-api:${CI_COMMIT_SHORT_SHA}"
+        echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+        docker tag "$LOCAL_IMAGE" "$REMOTE_IMAGE"
+        docker push "$REMOTE_IMAGE"
+        if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+          export LATEST_IMAGE="${CI_REGISTRY_IMAGE}/data-service-api:latest"
+          docker tag "$LOCAL_IMAGE" "$LATEST_IMAGE"
+          docker push "$LATEST_IMAGE"
+        fi
+      else
+        echo "GitLab container registry variables are unavailable, so the image was built but not pushed."
+      fi
