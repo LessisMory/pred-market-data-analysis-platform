@@ -1,0 +1,24 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    container_name: data_service_api
+    environment:
+      - CLICKHOUSE_HOST=transform_clickhouse
+      - CLICKHOUSE_PORT=8123
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=clickhouse
+      - CLICKHOUSE_DB=analytics
+      - CLICKHOUSE_SECURE=false
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    ports:
+      - "8000:8000"
+    networks:
+      - data_pipeline
+    restart: unless-stopped
+
+networks:
+  data_pipeline:
+    external: true
