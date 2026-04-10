@@ -31,17 +31,64 @@ def test_market_route_ensure_utc_assigns_utc_to_naive_datetimes() -> None:
     )
 
 
-def test_normalize_slug_rejects_blank_values() -> None:
-    with pytest.raises(markets_route.HTTPException, match="slug must not be blank"):
-        markets_route._normalize_slug("   ")
+def test_normalize_market_id_rejects_blank_values() -> None:
+    with pytest.raises(markets_route.HTTPException, match="market_id must not be blank"):
+        markets_route._normalize_market_id("   ")
 
 
-def test_resolve_time_window_rejects_invalid_window() -> None:
-    with pytest.raises(markets_route.HTTPException, match="start must be earlier than end"):
-        markets_route._resolve_time_window(
-            datetime(2025, 12, 1, 5, 1, 0, tzinfo=timezone.utc),
-            datetime(2025, 12, 1, 5, 0, 0, tzinfo=timezone.utc),
-        )
+def test_normalize_asset_id_rejects_blank_values() -> None:
+    with pytest.raises(markets_route.HTTPException, match="asset_id must not be blank"):
+        markets_route._normalize_asset_id("   ")
+
+
+def test_available_markets_endpoint_returns_market_metadata(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "slug": "btc-updown-15m-1764565200",
+                "market_id": "0xmarket",
+                "asset_id": "123",
+                "market_name": "Bitcoin Up or Down",
+                "token_name": "Up",
+            },
+            {
+                "slug": "eth-updown-15m-1764565200",
+                "market_id": "0xmarket2",
+                "asset_id": "456",
+                "market_name": "Ethereum Up or Down",
+                "token_name": "Down",
+            },
+        ]
+    )
+    fetch_mock = MagicMock(return_value=frame)
+    monkeypatch.setattr(markets_route, "fetch_available_markets", fetch_mock)
+
+    response = client.get("/markets", params={"limit": 50})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "count": 2,
+        "data": [
+            {
+                "slug": "btc-updown-15m-1764565200",
+                "market_id": "0xmarket",
+                "asset_id": "123",
+                "market_name": "Bitcoin Up or Down",
+                "token_name": "Up",
+            },
+            {
+                "slug": "eth-updown-15m-1764565200",
+                "market_id": "0xmarket2",
+                "asset_id": "456",
+                "market_name": "Ethereum Up or Down",
+                "token_name": "Down",
+            },
+        ],
+    }
+    fetch_mock.assert_called_once_with(limit=50)
 
 
 def test_market_depth_volume_chart_endpoint_returns_chart_ready_response(
@@ -52,7 +99,7 @@ def test_market_depth_volume_chart_endpoint_returns_chart_ready_response(
         [
             {
                 "slug": "btc-updown-15m-1764565200",
-                "market": "0xmarket",
+                "market_id": "0xmarket",
                 "asset_id": "123",
                 "timestamp": pd.Timestamp("2025-12-01T05:00:23Z"),
                 "buy_trade_vwap": 0.44,
@@ -85,9 +132,8 @@ def test_market_depth_volume_chart_endpoint_returns_chart_ready_response(
     response = client.get(
         "/markets/depth-volume-chart",
         params={
-            "slug": " btc-updown-15m-1764565200 ",
-            "start": "2025-12-01T05:00:00Z",
-            "end": "2025-12-01T05:05:00Z",
+            "market_id": " 0xmarket ",
+            "asset_id": " 123 ",
             "limit": 50,
         },
     )
@@ -95,10 +141,8 @@ def test_market_depth_volume_chart_endpoint_returns_chart_ready_response(
     assert response.status_code == 200
     assert response.json() == {
         "slug": "btc-updown-15m-1764565200",
-        "start": "2025-12-01T05:00:00Z",
-        "end": "2025-12-01T05:05:00Z",
         "count": 1,
-        "market": "0xmarket",
+        "market_id": "0xmarket",
         "asset_id": "123",
         "market_name": "Bitcoin Up or Down",
         "token_name": "Up",
@@ -162,43 +206,62 @@ def test_market_depth_volume_chart_endpoint_returns_chart_ready_response(
         ],
     }
     fetch_mock.assert_called_once_with(
-        slug="btc-updown-15m-1764565200",
-        start=datetime(2025, 12, 1, 5, 0, 0, tzinfo=timezone.utc),
-        end=datetime(2025, 12, 1, 5, 5, 0, tzinfo=timezone.utc),
+        market_id="0xmarket",
+        asset_id="123",
         limit=50,
     )
 
 
-def test_market_depth_volume_chart_endpoint_rejects_blank_slug(
+def test_market_depth_volume_chart_endpoint_uses_default_limit(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(markets_route, "fetch_market_depth_volume_chart", MagicMock(return_value=pd.DataFrame()))
+
+    response = client.get(
+        "/markets/depth-volume-chart",
+        params={
+            "market_id": "0xmarket",
+            "asset_id": "123",
+        },
+    )
+
+    assert response.status_code == 200
+    markets_route.fetch_market_depth_volume_chart.assert_called_once_with(
+        market_id="0xmarket",
+        asset_id="123",
+        limit=100,
+    )
+
+
+def test_market_depth_volume_chart_endpoint_rejects_blank_market_id(
     client: TestClient,
 ) -> None:
     response = client.get(
         "/markets/depth-volume-chart",
         params={
-            "slug": "   ",
-            "start": "2025-12-01T05:00:00Z",
-            "end": "2025-12-01T05:05:00Z",
+            "market_id": "   ",
+            "asset_id": "123",
         },
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "slug must not be blank."
+    assert response.json()["detail"] == "market_id must not be blank."
 
 
-def test_market_depth_volume_chart_endpoint_rejects_invalid_window(
+def test_market_depth_volume_chart_endpoint_rejects_blank_asset_id(
     client: TestClient,
 ) -> None:
     response = client.get(
         "/markets/depth-volume-chart",
         params={
-            "slug": "btc-updown-15m-1764565200",
-            "start": "2025-12-01T05:05:00Z",
-            "end": "2025-12-01T05:00:00Z",
+            "market_id": "0xmarket",
+            "asset_id": "   ",
         },
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "start must be earlier than end."
+    assert response.json()["detail"] == "asset_id must not be blank."
 
 
 @pytest.mark.parametrize("limit", [0, 10001])
@@ -209,9 +272,8 @@ def test_market_depth_volume_chart_endpoint_validates_limit_bounds(
     response = client.get(
         "/markets/depth-volume-chart",
         params={
-            "slug": "btc-updown-15m-1764565200",
-            "start": "2025-12-01T05:00:00Z",
-            "end": "2025-12-01T05:05:00Z",
+            "market_id": "0xmarket",
+            "asset_id": "123",
             "limit": limit,
         },
     )
@@ -232,11 +294,26 @@ def test_market_depth_volume_chart_endpoint_surfaces_fetch_errors(
     response = client.get(
         "/markets/depth-volume-chart",
         params={
-            "slug": "btc-updown-15m-1764565200",
-            "start": "2025-12-01T05:00:00Z",
-            "end": "2025-12-01T05:05:00Z",
+            "market_id": "0xmarket",
+            "asset_id": "123",
         },
     )
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Unable to fetch market chart data: query failed"
+
+
+def test_available_markets_endpoint_surfaces_fetch_errors(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        markets_route,
+        "fetch_available_markets",
+        MagicMock(side_effect=MarketChartFetchError("query failed")),
+    )
+
+    response = client.get("/markets")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Unable to fetch available markets: query failed"

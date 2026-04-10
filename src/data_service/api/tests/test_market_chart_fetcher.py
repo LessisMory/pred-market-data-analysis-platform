@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -14,7 +13,7 @@ def _make_chart_row(**overrides: object) -> dict[str, object]:
     row.update(
         {
             "slug": "btc-updown-15m-1764565200",
-            "market": "0xmarket",
+            "market_id": "0xmarket",
             "asset_id": "123",
             "timestamp": "2025-12-01T05:00:23Z",
             "buy_trade_vwap": 0.44,
@@ -63,12 +62,9 @@ def test_fetch_market_depth_volume_chart_builds_query_and_cleans_results(
     monkeypatch.setattr(fetcher_module, "get_qualified_table_name", lambda _name: "analytics.books_wide_df_enriched")
     monkeypatch.setattr(fetcher_module, "_query_dataframe", query_mock)
 
-    start = datetime(2025, 12, 1, 5, 0, 0)
-    end = datetime(2025, 12, 1, 5, 5, 0, tzinfo=timezone.utc)
     frame = fetcher_module.fetch_market_depth_volume_chart(
-        " btc-updown-15m-1764565200 ",
-        start,
-        end,
+        " 0xmarket ",
+        " 123 ",
         250,
     )
 
@@ -82,11 +78,11 @@ def test_fetch_market_depth_volume_chart_builds_query_and_cleans_results(
     query = query_mock.call_args.args[0]
     parameters = query_mock.call_args.args[1]
     assert "FROM analytics.books_wide_df_enriched" in query
-    assert "WHERE slug = %(slug)s" in query
-    assert "ORDER BY timestamp ASC" in query
-    assert parameters["slug"] == "btc-updown-15m-1764565200"
-    assert parameters["start"].tzinfo == timezone.utc
-    assert parameters["end"].tzinfo == timezone.utc
+    assert "WHERE market = %(market_id)s" in query
+    assert "AND asset_id = %(asset_id)s" in query
+    assert "ORDER BY timestamp DESC" in query
+    assert parameters["market_id"] == "0xmarket"
+    assert parameters["asset_id"] == "123"
     assert parameters["limit"] == 250
 
 
@@ -97,9 +93,8 @@ def test_fetch_market_depth_volume_chart_returns_empty_frame_with_expected_colum
     monkeypatch.setattr(fetcher_module, "_query_dataframe", lambda *_args: pd.DataFrame())
 
     frame = fetcher_module.fetch_market_depth_volume_chart(
-        "btc-updown-15m-1764565200",
-        datetime(2025, 12, 1, 5, 0, 0, tzinfo=timezone.utc),
-        datetime(2025, 12, 1, 5, 5, 0, tzinfo=timezone.utc),
+        "0xmarket",
+        "123",
         10,
     )
 
@@ -116,9 +111,8 @@ def test_fetch_market_depth_volume_chart_raises_on_missing_columns(
 
     with pytest.raises(fetcher_module.MarketChartFetchError, match="missing expected columns"):
         fetcher_module.fetch_market_depth_volume_chart(
-            "btc-updown-15m-1764565200",
-            datetime(2025, 12, 1, 5, 0, 0, tzinfo=timezone.utc),
-            datetime(2025, 12, 1, 5, 5, 0, tzinfo=timezone.utc),
+            "0xmarket",
+            "123",
             10,
         )
 
@@ -131,8 +125,66 @@ def test_fetch_market_depth_volume_chart_wraps_query_errors(
 
     with pytest.raises(fetcher_module.MarketChartFetchError, match="ClickHouse query failed: boom"):
         fetcher_module.fetch_market_depth_volume_chart(
-            "btc-updown-15m-1764565200",
-            datetime(2025, 12, 1, 5, 0, 0, tzinfo=timezone.utc),
-            datetime(2025, 12, 1, 5, 5, 0, tzinfo=timezone.utc),
+            "0xmarket",
+            "123",
             10,
         )
+
+
+def test_fetch_available_markets_returns_distinct_market_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_frame = pd.DataFrame(
+        [
+            {
+                "slug": "btc-updown-15m-1764565200",
+                "market_id": "0xmarket",
+                "asset_id": "123",
+                "market_name": "Bitcoin Up or Down",
+                "token_name": "Up",
+                "ignored": "x",
+            },
+            {
+                "slug": "eth-updown-15m-1764565200",
+                "market_id": "0xmarket-2",
+                "asset_id": "456",
+                "market_name": "Ethereum Up or Down",
+                "token_name": "Down",
+                "ignored": "y",
+            },
+        ]
+    )
+    query_mock = MagicMock(return_value=source_frame)
+    monkeypatch.setattr(
+        fetcher_module,
+        "get_qualified_table_name",
+        lambda _name: "analytics.books_wide_df_enriched",
+    )
+    monkeypatch.setattr(fetcher_module, "_query_dataframe", query_mock)
+
+    frame = fetcher_module.fetch_available_markets(25)
+
+    assert list(frame.columns) == fetcher_module.MARKET_METADATA_COLUMNS
+    assert frame.to_dict(orient="records") == [
+        {
+            "slug": "btc-updown-15m-1764565200",
+            "market_id": "0xmarket",
+            "asset_id": "123",
+            "market_name": "Bitcoin Up or Down",
+            "token_name": "Up",
+        },
+        {
+            "slug": "eth-updown-15m-1764565200",
+            "market_id": "0xmarket-2",
+            "asset_id": "456",
+            "market_name": "Ethereum Up or Down",
+            "token_name": "Down",
+        },
+    ]
+
+    query = query_mock.call_args.args[0]
+    parameters = query_mock.call_args.args[1]
+    assert "SELECT DISTINCT" in query
+    assert "market AS market_id" in query
+    assert "LIMIT %(limit)s" in query
+    assert parameters == {"limit": 25}
