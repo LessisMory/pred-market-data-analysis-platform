@@ -57,7 +57,7 @@ const TerminalScreen = () => {
     setChartData(Array.from({ length: 40 }, () => 50 + Math.random() * 20));
   }, [timeframe, activeMarket, startDate, endDate]);
 
-  // POST /v1/orders — route order to execution engine with market and size
+  // POST /v1/orders/execute — submit order payload { market, size, type } to matching engine
   const handlePlaceOrder = async () => {
     if (!orderSize || isNaN(orderSize) || Number(orderSize) <= 0) {
       return alert("Please enter a valid order size.");
@@ -65,7 +65,7 @@ const TerminalScreen = () => {
     setIsExecuting(true);
 
     // try {
-    //   const res = await fetch('https://api.yourbackend.com/v1/orders', {
+    //   const res = await fetch('https://api.yourbackend.com/v1/orders/execute', {
     //     method: 'POST',
     //     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('jwt_token')}` },
     //     body: JSON.stringify({ market: activeMarket, size: Number(orderSize), type: 'market' })

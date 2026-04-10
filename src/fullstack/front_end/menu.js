@@ -11,16 +11,16 @@ const MenuScreen = () => {
     upVol: "$1.2M", dnVol: "$840K"
   });
 
-  // GET /v1/user/me — load user identity, plan tier, and role
+  // GET /v1/user/profile — load user identity, plan tier, and role
   useEffect(() => {
     // try {
-    //   const res = await fetch('https://api.yourbackend.com/v1/user/me', {
+    //   const res = await fetch('https://api.yourbackend.com/v1/user/profile', {
     //     headers: { 'Authorization': `Bearer ${localStorage.getItem('jwt_token')}` }
     //   });
     //   const data = await res.json();
     //   setUserName(data.firstName);
     //   setUserPlan(data.planName);
-    //   setIsAdmin(data.role === 'admin');
+    //   setIsAdmin(data.role === 'admin');  // confirm field name: data.role or data.user.role
     // } catch (err) { console.error(err); }
 
     const savedName = localStorage.getItem('ob_user_name');

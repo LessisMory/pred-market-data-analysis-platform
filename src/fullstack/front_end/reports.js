@@ -30,7 +30,7 @@ const ReportingScreen = () => {
       //   const headers = { 'Authorization': `Bearer ${localStorage.getItem('jwt_token')}` };
       //   const [metricsRes, scheduledRes] = await Promise.all([
       //     fetch('https://api.yourbackend.com/v1/reports/metrics', { headers }),
-      //     fetch('https://api.yourbackend.com/v1/reports/scheduled', { headers })
+      //     fetch('https://api.yourbackend.com/v1/reports/scheduled', { headers })  // endpoint not in API table — confirm with backend
       //   ]);
       //   setMetrics(await metricsRes.json());
       //   setScheduledReports(await scheduledRes.json());
