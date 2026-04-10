@@ -133,6 +133,12 @@ def test_get_qualified_table_name_validates_identifiers(
 
     monkeypatch.setenv("CLICKHOUSE_DB", "analytics")
     client_module.get_clickhouse_settings.cache_clear()
+    assert client_module.get_qualified_table_name("15m_btc_updown_order_book") == (
+        "analytics.`15m_btc_updown_order_book`"
+    )
+
+    monkeypatch.setenv("CLICKHOUSE_DB", "analytics")
+    client_module.get_clickhouse_settings.cache_clear()
     with pytest.raises(RuntimeError, match="Invalid ClickHouse table name"):
         client_module.get_qualified_table_name("chainlink.prices")
 

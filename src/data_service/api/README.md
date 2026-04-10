@@ -5,6 +5,7 @@ This directory contains the FastAPI layer for `data_service`.
 Current scope:
 - `GET /health`
 - `GET /chainlink/prices`
+- `GET /markets`
 - `GET /markets/depth-volume-chart`
 
 This first API slice reads Chainlink price data from ClickHouse and is structured to make future endpoints easy to add with the same pattern:
@@ -146,25 +147,46 @@ curl "http://localhost:8000/chainlink/prices?symbol=btcusd&start=2024-01-01T00:0
 curl "http://localhost:8000/chainlink/prices?symbol=eth&latest=true&limit=10"
 ```
 
+### `GET /markets`
+
+Returns distinct markets currently available in the chart table.
+
+Successful response shape:
+
+```json
+{
+  "count": 1,
+  "data": [
+    {
+      "slug": "btc-updown-15m-1764565200",
+      "market_id": "0xmarket",
+      "asset_id": "123",
+      "market_name": "Bitcoin Up or Down",
+      "token_name": "Up"
+    }
+  ]
+}
+```
+
 ### `GET /markets/depth-volume-chart`
 
-Returns chart-ready market points keyed by `slug + timestamp`. Each point contains:
+Returns the latest chart-ready market points for a `market_id + asset_id` pair. Each point contains:
 - transaction volume metrics for the timestamp
 - order book depth across bid and ask levels
 - top-of-book summary fields such as mid price, spread, and imbalance
 
 Required query parameters:
-- `slug`
-- `start`
-- `end`
+- `market_id`
+- `asset_id`
 
 Optional query parameters:
-- `limit` with default `1000`, minimum `1`, maximum `10000`
+- `limit` with default `100`, minimum `1`, maximum `10000`
 
 Example:
 
 ```bash
-curl "http://localhost:8000/markets/depth-volume-chart?slug=btc-updown-15m-1764565200&start=2025-12-01T05:00:00Z&end=2025-12-01T05:05:00Z&limit=300"
+curl "http://localhost:8000/markets"
+curl "http://localhost:8000/markets/depth-volume-chart?market_id=0xmarket&asset_id=123&limit=300"
 ```
 
 Successful response shape:
@@ -172,10 +194,8 @@ Successful response shape:
 ```json
 {
   "slug": "btc-updown-15m-1764565200",
-  "start": "2025-12-01T05:00:00Z",
-  "end": "2025-12-01T05:05:00Z",
   "count": 1,
-  "market": "0xmarket",
+  "market_id": "0xmarket",
   "asset_id": "123",
   "market_name": "Bitcoin Up or Down",
   "token_name": "Up",
@@ -257,7 +277,18 @@ See [.env.example](/Users/moryshi/Projects/fintech/512/pred_market_data_platform
 
 ## Running Locally
 
-From `src/data_service`:
+The API dependency set targets Python 3.11, which matches the GitLab CI image.
+
+From the repo root:
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r src/data_service/api/requirements-dev.txt
+```
+
+Then from `src/data_service`:
 
 ```bash
 uvicorn api.api:app --reload
@@ -289,10 +320,10 @@ See:
 
 ## Running Tests
 
-From the repo root:
+Use the same Python 3.11 virtualenv described above, then from the repo root:
 
 ```bash
-pytest src/data_service/api/tests
+python -m pytest src/data_service/api/tests
 ```
 
 Coverage:

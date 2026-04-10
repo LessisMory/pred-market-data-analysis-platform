@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from ..fetchers.market_chart_fetcher import (
     MarketChartFetchError,
+    fetch_available_markets,
     fetch_market_depth_volume_chart,
 )
 
@@ -20,28 +21,22 @@ def _ensure_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-def _normalize_slug(slug: str) -> str:
-    cleaned = slug.strip()
+def _normalize_required_text(value: str, field_name: str) -> str:
+    cleaned = value.strip()
     if not cleaned:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="slug must not be blank.",
+            detail=f"{field_name} must not be blank.",
         )
     return cleaned
 
 
-def _resolve_time_window(
-    start: datetime,
-    end: datetime,
-) -> tuple[datetime, datetime]:
-    start_utc = _ensure_utc(start)
-    end_utc = _ensure_utc(end)
-    if start_utc >= end_utc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="start must be earlier than end.",
-        )
-    return start_utc, end_utc
+def _normalize_market_id(market_id: str) -> str:
+    return _normalize_required_text(market_id, "market_id")
+
+
+def _normalize_asset_id(asset_id: str) -> str:
+    return _normalize_required_text(asset_id, "asset_id")
 
 
 def _serialize_datetime(value: Any) -> str | None:
@@ -148,59 +143,97 @@ def _serialize_chart_point(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _serialize_market_metadata(record: dict[str, Any] | None) -> dict[str, Any]:
-    if record is None:
-        return {
-            "market": None,
-            "asset_id": None,
-            "market_name": None,
-            "token_name": None,
-        }
-
+def _serialize_market_summary(record: dict[str, Any]) -> dict[str, Any]:
     return {
-        "market": _serialize_string(record.get("market")),
+        "slug": _serialize_string(record.get("slug")),
+        "market_id": _serialize_string(record.get("market_id")),
         "asset_id": _serialize_string(record.get("asset_id")),
         "market_name": _serialize_string(record.get("market_name")),
         "token_name": _serialize_string(record.get("token_name")),
     }
 
 
+def _serialize_market_metadata(record: dict[str, Any] | None) -> dict[str, Any]:
+    if record is None:
+        return {
+            "slug": None,
+            "market_id": None,
+            "asset_id": None,
+            "market_name": None,
+            "token_name": None,
+        }
+
+    return {
+        "slug": _serialize_string(record.get("slug")),
+        "market_id": _serialize_string(record.get("market_id")),
+        "asset_id": _serialize_string(record.get("asset_id")),
+        "market_name": _serialize_string(record.get("market_name")),
+        "token_name": _serialize_string(record.get("token_name")),
+    }
+
+
+@router.get("")
+def get_available_markets(
+    limit: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=10_000,
+            description="Maximum number of distinct markets to return.",
+        ),
+    ] = 100,
+) -> dict[str, Any]:
+    """Return distinct market identifiers and metadata available in the chart table."""
+
+    try:
+        frame = fetch_available_markets(limit=limit)
+    except MarketChartFetchError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Unable to fetch available markets: {exc}",
+        ) from exc
+
+    data = [_serialize_market_summary(record) for record in frame.to_dict(orient="records")]
+    return {
+        "count": len(data),
+        "data": data,
+    }
+
+
 @router.get("/depth-volume-chart")
 def get_market_depth_volume_chart(
-    slug: Annotated[
+    market_id: Annotated[
         str,
         Query(
             min_length=1,
-            description="Market slug used together with timestamp to identify chart points.",
+            description="Polymarket market ID.",
         ),
     ],
-    start: Annotated[
-        datetime,
-        Query(description="ISO 8601 start time for the chart window."),
-    ],
-    end: Annotated[
-        datetime,
-        Query(description="ISO 8601 end time for the chart window."),
+    asset_id: Annotated[
+        str,
+        Query(
+            min_length=1,
+            description="Outcome asset ID for the market token.",
+        ),
     ],
     limit: Annotated[
         int,
         Query(
             ge=1,
             le=10_000,
-            description="Maximum number of timestamped chart points to return.",
+            description="Maximum number of latest timestamped chart points to return.",
         ),
-    ] = 1_000,
+    ] = 100,
 ) -> dict[str, Any]:
-    """Return chart-ready order-book depth and trade volume points for a market slug."""
+    """Return the latest chart-ready points for a market and asset pair."""
 
-    normalized_slug = _normalize_slug(slug)
-    start_utc, end_utc = _resolve_time_window(start, end)
+    normalized_market_id = _normalize_market_id(market_id)
+    normalized_asset_id = _normalize_asset_id(asset_id)
 
     try:
         frame = fetch_market_depth_volume_chart(
-            slug=normalized_slug,
-            start=start_utc,
-            end=end_utc,
+            market_id=normalized_market_id,
+            asset_id=normalized_asset_id,
             limit=limit,
         )
     except MarketChartFetchError as exc:
@@ -213,9 +246,6 @@ def get_market_depth_volume_chart(
     metadata = _serialize_market_metadata(records[0] if records else None)
     data = [_serialize_chart_point(record) for record in records]
     return {
-        "slug": normalized_slug,
-        "start": _serialize_datetime(start_utc),
-        "end": _serialize_datetime(end_utc),
         "count": len(data),
         **metadata,
         "data": data,

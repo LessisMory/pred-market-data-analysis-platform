@@ -2,26 +2,15 @@ from __future__ import annotations
 
 import textwrap
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import Any
+
+import pandas as pd
 
 from ..db.client import get_clickhouse_client, get_qualified_table_name
-
-if TYPE_CHECKING:
-    import pandas as pd
 
 
 class ChainlinkFetchError(RuntimeError):
     """Raised when Chainlink price data cannot be fetched for the API."""
-
-
-def _get_pandas_module() -> Any:
-    try:
-        import pandas as pd
-    except ImportError as exc:
-        raise ChainlinkFetchError(
-            "pandas is required to shape Chainlink API query results."
-        ) from exc
-    return pd
 
 
 def _ensure_utc(value: datetime) -> datetime:
@@ -30,8 +19,7 @@ def _ensure_utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
-def _query_dataframe(query: str, parameters: dict[str, Any]) -> "pd.DataFrame":
-    pd = _get_pandas_module()
+def _query_dataframe(query: str, parameters: dict[str, Any]) -> pd.DataFrame:
     client = get_clickhouse_client()
 
     query_df = getattr(client, "query_df", None)
@@ -42,8 +30,7 @@ def _query_dataframe(query: str, parameters: dict[str, Any]) -> "pd.DataFrame":
     return pd.DataFrame(result.result_rows, columns=result.column_names)
 
 
-def _clean_price_frame(frame: "pd.DataFrame") -> "pd.DataFrame":
-    pd = _get_pandas_module()
+def _clean_price_frame(frame: pd.DataFrame) -> pd.DataFrame:
     expected_columns = ["update_timestamp", "value", "symbol"]
 
     if frame.empty and len(frame.columns) == 0:
@@ -73,7 +60,7 @@ def fetch_chainlink_prices(
     start: datetime,
     end: datetime,
     limit: int,
-) -> "pd.DataFrame":
+) -> pd.DataFrame:
     """Fetch Chainlink prices for the requested symbol and time range."""
 
     table_name = get_qualified_table_name("chainlink_prices")
@@ -106,7 +93,7 @@ def fetch_chainlink_prices(
     return _clean_price_frame(frame)
 
 
-def fetch_latest_chainlink_prices(symbol: str, limit: int) -> "pd.DataFrame":
+def fetch_latest_chainlink_prices(symbol: str, limit: int) -> pd.DataFrame:
     """Fetch the latest available Chainlink prices for a symbol."""
 
     table_name = get_qualified_table_name("chainlink_prices")

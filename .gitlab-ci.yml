@@ -10,41 +10,78 @@ default:
 
 variables:
   API_DIR: "src/data_service/api"
+  INFLOW_GATEWAY_DIR: "src/data_service/inflow_gateway"
+  TRANSFORM_LAYER_DIR: "src/data_service/transform_layer"
+  DATABASE_DIR: "src/data_service/database"
+  DATA_INITIALIZATION_DIR: "src/data_service/database/data_initialization"
   DATA_SERVICE_DIR: "src/data_service"
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   DOCKER_BUILDKIT: "1"
-  SAST_EXCLUDED_PATHS: "docs,venv,src/data_service/api/tests,src/data_service/database,src/data_service/inflow_gateway,src/data_service/shared,src/data_service/transform_layer,src/data_service/tests"
+  SAST_EXCLUDED_PATHS: "docs,venv,src/data_service/api/tests,src/data_service/inflow_gateway/tests,src/data_service/transform_layer/tests,src/data_service/tests"
 
 cache:
   key: "$CI_JOB_NAME"
   paths:
     - .cache/pip
 
-.api_branch_or_mr_changes: &api_branch_or_mr_changes
+.data_service_branch_or_mr_changes: &data_service_branch_or_mr_changes
   - if: '$CI_PIPELINE_SOURCE == "push"'
     changes:
       - .gitlab-ci.yml
-      - src/data_service/api/*
-      - src/data_service/api/**/*
+      - src/data_service/*
+      - src/data_service/**/*
   - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     changes:
       - .gitlab-ci.yml
-      - src/data_service/api/*
-      - src/data_service/api/**/*
+      - src/data_service/*
+      - src/data_service/**/*
   - when: never
 
-.api_push_changes: &api_push_changes
+.data_service_push_changes: &data_service_push_changes
   - if: '$CI_PIPELINE_SOURCE == "push"'
     changes:
       - .gitlab-ci.yml
-      - src/data_service/api/*
-      - src/data_service/api/**/*
+      - src/data_service/*
+      - src/data_service/**/*
   - when: never
 
-api_tests:
+.python_test_template:
   image: python:3.11-slim
   stage: test
-  rules: *api_branch_or_mr_changes
+  rules: *data_service_branch_or_mr_changes
+
+.docker_build_release_template:
+  image: docker:24.0.5-cli
+  stage: build
+  rules: *data_service_push_changes
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+  script:
+    - export LOCAL_IMAGE="${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
+    - docker build --pull -f "$DOCKERFILE_PATH" -t "$LOCAL_IMAGE" "$BUILD_CONTEXT"
+    - |
+      if [ -n "${CI_REGISTRY:-}" ] && [ -n "${CI_REGISTRY_USER:-}" ] && [ -n "${CI_REGISTRY_PASSWORD:-}" ] && [ -n "${CI_REGISTRY_IMAGE:-}" ]; then
+        export REMOTE_IMAGE="${CI_REGISTRY_IMAGE}/${IMAGE_NAME}:${CI_COMMIT_SHORT_SHA}"
+        echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+        docker tag "$LOCAL_IMAGE" "$REMOTE_IMAGE"
+        docker push "$REMOTE_IMAGE"
+        if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+          export LATEST_IMAGE="${CI_REGISTRY_IMAGE}/${IMAGE_NAME}:latest"
+          docker tag "$LOCAL_IMAGE" "$LATEST_IMAGE"
+          docker push "$LATEST_IMAGE"
+        fi
+      else
+        echo "GitLab container registry variables are unavailable, so the image was built but not pushed."
+      fi
+
+api_tests:
+  extends: .python_test_template
   before_script:
     - python -m pip install --upgrade pip
     - python -m pip install -r "$API_DIR/requirements-dev.txt"
@@ -57,34 +94,73 @@ api_tests:
     paths:
       - api-junit.xml
 
+inflow_gateway_tests:
+  extends: .python_test_template
+  before_script:
+    - python -m pip install --upgrade pip
+    - python -m pip install -r "$INFLOW_GATEWAY_DIR/requirements.txt"
+  script:
+    - cd "$INFLOW_GATEWAY_DIR"
+    - python -m pytest tests --junitxml="$CI_PROJECT_DIR/inflow-gateway-junit.xml"
+  artifacts:
+    when: always
+    reports:
+      junit: inflow-gateway-junit.xml
+    paths:
+      - inflow-gateway-junit.xml
+
+transform_layer_tests:
+  extends: .python_test_template
+  before_script:
+    - python -m pip install --upgrade pip
+    - python -m pip install pytest==8.4.1 pytest-cov==7.0.0
+  script:
+    - export PYTHONPATH="$CI_PROJECT_DIR/$DATA_SERVICE_DIR${PYTHONPATH:+:$PYTHONPATH}"
+    - python -m pytest "$TRANSFORM_LAYER_DIR/tests" --junitxml=transform-layer-junit.xml --cov="$TRANSFORM_LAYER_DIR" --cov-report=term-missing
+  artifacts:
+    when: always
+    reports:
+      junit: transform-layer-junit.xml
+    paths:
+      - transform-layer-junit.xml
+
 api_build_release:
-  image: docker:24.0.5-cli
-  stage: build
-  rules: *api_push_changes
+  extends: .docker_build_release_template
   needs:
     - api_tests
-  services:
-    - name: docker:24.0.5-dind
-      alias: docker
-      command: ["--tls=false"]
   variables:
-    DOCKER_HOST: "tcp://docker:2375"
-    DOCKER_TLS_CERTDIR: ""
-    DOCKER_DRIVER: overlay2
-  script:
-    - export LOCAL_IMAGE="data-service-api:${CI_COMMIT_SHORT_SHA}"
-    - docker build --pull -f "$API_DIR/Dockerfile" -t "$LOCAL_IMAGE" "$DATA_SERVICE_DIR"
-    - |
-      if [ -n "${CI_REGISTRY:-}" ] && [ -n "${CI_REGISTRY_USER:-}" ] && [ -n "${CI_REGISTRY_PASSWORD:-}" ] && [ -n "${CI_REGISTRY_IMAGE:-}" ]; then
-        export REMOTE_IMAGE="${CI_REGISTRY_IMAGE}/data-service-api:${CI_COMMIT_SHORT_SHA}"
-        echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
-        docker tag "$LOCAL_IMAGE" "$REMOTE_IMAGE"
-        docker push "$REMOTE_IMAGE"
-        if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
-          export LATEST_IMAGE="${CI_REGISTRY_IMAGE}/data-service-api:latest"
-          docker tag "$LOCAL_IMAGE" "$LATEST_IMAGE"
-          docker push "$LATEST_IMAGE"
-        fi
-      else
-        echo "GitLab container registry variables are unavailable, so the image was built but not pushed."
-      fi
+    IMAGE_NAME: "data-service-api"
+    DOCKERFILE_PATH: "$API_DIR/Dockerfile"
+    BUILD_CONTEXT: "$DATA_SERVICE_DIR"
+
+inflow_gateway_build_release:
+  extends: .docker_build_release_template
+  needs:
+    - inflow_gateway_tests
+  variables:
+    IMAGE_NAME: "data-service-inflow-gateway"
+    DOCKERFILE_PATH: "$INFLOW_GATEWAY_DIR/Dockerfile"
+    BUILD_CONTEXT: "$DATA_SERVICE_DIR"
+
+transform_layer_build_release:
+  extends: .docker_build_release_template
+  needs:
+    - transform_layer_tests
+  variables:
+    IMAGE_NAME: "data-service-transform-layer"
+    DOCKERFILE_PATH: "$TRANSFORM_LAYER_DIR/Dockerfile"
+    BUILD_CONTEXT: "$DATA_SERVICE_DIR"
+
+database_build_release:
+  extends: .docker_build_release_template
+  variables:
+    IMAGE_NAME: "data-service-database"
+    DOCKERFILE_PATH: "$DATABASE_DIR/Dockerfile"
+    BUILD_CONTEXT: "$DATABASE_DIR"
+
+data_initialization_build_release:
+  extends: .docker_build_release_template
+  variables:
+    IMAGE_NAME: "data-service-data-initialization"
+    DOCKERFILE_PATH: "$DATA_INITIALIZATION_DIR/Dockerfile"
+    BUILD_CONTEXT: "$DATA_SERVICE_DIR"

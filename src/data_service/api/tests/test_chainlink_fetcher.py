@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import builtins
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -50,22 +49,6 @@ def test_query_dataframe_falls_back_to_query_results(
         "value": 100.0,
         "symbol": "BTC",
     }
-
-
-def test_get_pandas_module_raises_helpful_error_when_missing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    real_import = builtins.__import__
-
-    def fake_import(name: str, *args: object, **kwargs: object) -> object:
-        if name == "pandas":
-            raise ImportError("missing pandas")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", fake_import)
-
-    with pytest.raises(fetcher_module.ChainlinkFetchError, match="pandas is required"):
-        fetcher_module._get_pandas_module()
 
 
 def test_fetch_chainlink_prices_cleans_results_and_builds_query(

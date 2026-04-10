@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from clickhouse_connect.driver.client import Client
 
-_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_SIMPLE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_QUOTABLE_TABLE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
 
 def _first_env(*names: str, default: str | None = None) -> str | None:
@@ -105,13 +106,15 @@ def get_qualified_table_name(table_name: str) -> str:
     """Return a fully qualified table name using the configured database."""
 
     settings = get_clickhouse_settings()
-    if not _IDENTIFIER_RE.fullmatch(settings.database):
+    if not _SIMPLE_IDENTIFIER_RE.fullmatch(settings.database):
         raise RuntimeError(
             f"Invalid ClickHouse database name configured: {settings.database!r}"
         )
-    if not _IDENTIFIER_RE.fullmatch(table_name):
-        raise RuntimeError(f"Invalid ClickHouse table name requested: {table_name!r}")
-    return f"{settings.database}.{table_name}"
+    if _SIMPLE_IDENTIFIER_RE.fullmatch(table_name):
+        return f"{settings.database}.{table_name}"
+    if _QUOTABLE_TABLE_NAME_RE.fullmatch(table_name):
+        return f"{settings.database}.`{table_name}`"
+    raise RuntimeError(f"Invalid ClickHouse table name requested: {table_name!r}")
 
 
 def get_clickhouse_health(table_name: str = "chainlink_prices") -> ClickHouseHealth:
