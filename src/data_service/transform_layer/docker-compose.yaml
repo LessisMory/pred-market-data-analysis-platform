@@ -80,6 +80,7 @@ services:
       - POSTGRES_DSN=postgresql://postgres:postgres@persistence_postgres:5432/postgres
       - ORDER_BOOK_UPDATES_TABLE=order_book_updates
       - ORDER_BOOK_SNAPSHOTS_TABLE=order_book_snapshots
+      - ORDER_BOOK_TRADES_TABLE=order_book_trades
       - BATCH_SIZE=500
       - BATCH_INTERVAL_SECONDS=1.0
     networks:

@@ -19,4 +19,5 @@
 -- d4
 \i tables/order_book_updates.sql
 \i tables/order_book_snapshots.sql
+\i tables/order_book_trades.sql
 \i tables/trades.sql

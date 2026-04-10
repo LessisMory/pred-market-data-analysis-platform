@@ -29,6 +29,7 @@ class TransformWriter:
         self._stop_event = asyncio.Event()
         self._table_order_book_updates = self._validate_table(settings.postgres.order_book_updates_table)
         self._table_order_book_snapshots = self._validate_table(settings.postgres.order_book_snapshots_table)
+        self._table_order_book_trades = self._validate_table(settings.postgres.order_book_trades_table)
         self._table_chainlink = self._validate_table(settings.postgres.chainlink_table)
         self._table_binance = self._validate_table(settings.postgres.binance_table)
         self._table_passthrough = self._validate_table(os.getenv("PASSTHROUGH_TABLE", "kafka_raw_events"))
@@ -122,6 +123,8 @@ class TransformWriter:
             return self._build_snapshot_records(base)
         if event_type == "price_change":
             return self._build_order_book_update_records(base, ingested_at)
+        if event_type == "last_trade_price":
+            return self._build_order_book_trade_records(base, ingested_at)
         if source and source.lower() == "chainlink":
             return self._build_chainlink_records(base, source, ingested_at)
         if source and source.lower() == "binance":
@@ -225,6 +228,44 @@ class TransformWriter:
             )
         return records
 
+    def _build_order_book_trade_records(self, base: Dict[str, Any], _ingested_at: datetime) -> List[Tuple[str, Tuple]]:
+        """Convert last_trade_price events into order book trade rows."""
+        market_id = _to_str(base.get("market"))
+        token_id = _to_str(base.get("asset_id"))
+        price = _to_float(base.get("price"))
+        size = _to_float(base.get("size"))
+        fee_rate_bps = _to_int(base.get("fee_rate_bps"))
+        side = _to_upper_str(base.get("side"))
+        transaction_hash = _to_str(base.get("transaction_hash"))
+        trade_ts = _ms_to_datetime(base.get("timestamp"))
+
+        if (
+            not market_id
+            or not token_id
+            or price is None
+            or size is None
+            or not side
+            or not transaction_hash
+            or trade_ts is None
+        ):
+            return []
+
+        return [
+            (
+                self._table_order_book_trades,
+                (
+                    market_id,
+                    token_id,
+                    price,
+                    size,
+                    fee_rate_bps,
+                    side,
+                    transaction_hash,
+                    trade_ts,
+                ),
+            )
+        ]
+
     def _build_chainlink_records(
         self, base: Dict[str, Any], source: Optional[str], ingested_at: datetime
     ) -> List[Tuple[str, Tuple]]:
@@ -318,15 +359,22 @@ class TransformWriter:
                 "INSERT INTO "
                 f"{self._table_order_book_updates} "
                 "(token_id, price, size, side, update_timestamp, send_timestamp, arrival_timestamp, dedupe_key) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) "
                 "ON CONFLICT (dedupe_key) DO NOTHING"
             ),
             self._table_order_book_snapshots: (
                 "INSERT INTO "
                 f"{self._table_order_book_snapshots} "
                 "(token_id, book, side, top_price, top_size, snapshot_timestamp) "
-                "VALUES ($1, $2, $3, $4, $5, $6)"
+                "VALUES ($1, $2, $3, $4, $5, $6) "
                 "ON CONFLICT (token_id, side, snapshot_timestamp) DO NOTHING"
+            ),
+            self._table_order_book_trades: (
+                "INSERT INTO "
+                f"{self._table_order_book_trades} "
+                "(market_id, token_id, price, size, fee_rate_bps, side, transaction_hash, trade_timestamp) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) "
+                "ON CONFLICT (transaction_hash) DO NOTHING"
             ),
             self._table_chainlink: (
                 "INSERT INTO "
@@ -441,6 +489,13 @@ def _to_str(value: object) -> Optional[str]:
     if value is None:
         return None
     return str(value)
+
+
+def _to_upper_str(value: object) -> Optional[str]:
+    text = _to_str(value)
+    if text is None:
+        return None
+    return text.upper()
 
 
 def _ms_to_datetime(value: object) -> Optional[datetime]:

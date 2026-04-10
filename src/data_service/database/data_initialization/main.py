@@ -559,6 +559,26 @@ def _log(message: str, *, error: bool = False) -> None:
     print(f"{prefix} {timestamp} {message}", file=target, flush=True)
 
 
+def _connect_with_retry(
+    conn_kwargs: Dict[str, Any],
+    *,
+    retry_seconds: int = 5,
+) -> psycopg2.extensions.connection:
+    """Wait for Postgres readiness instead of failing a whole refresh cycle."""
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            return psycopg2.connect(**conn_kwargs)
+        except psycopg2.OperationalError as exc:
+            _log(
+                "Postgres is not ready yet "
+                f"(attempt {attempt}, retrying in {retry_seconds}s): {exc}",
+                error=True,
+            )
+            time.sleep(retry_seconds)
+
+
 # ---------- One-time init helpers ----------
 INIT_MARKER = Path(
     os.environ.get("INIT_MARKER_PATH", "/app/db/data_initialization/.init_done")
@@ -591,9 +611,14 @@ def populate_database(
     port: Optional[str] = None,
     user: Optional[str] = None,
     password: Optional[str] = None,
+    connect_timeout_seconds: int = 5,
+    connect_retry_seconds: int = 5,
 ) -> None:
     """Populate all tables using data from Polymarket."""
-    conn_kwargs = {"dbname": db_name}
+    conn_kwargs = {
+        "dbname": db_name,
+        "connect_timeout": connect_timeout_seconds,
+    }
     if host:
         conn_kwargs["host"] = host
     if port:
@@ -603,7 +628,7 @@ def populate_database(
     if password:
         conn_kwargs["password"] = password
 
-    conn = psycopg2.connect(**conn_kwargs)
+    conn = _connect_with_retry(conn_kwargs, retry_seconds=connect_retry_seconds)
     try:
         # Load series first to ensure FK target exists
         series_data = fetch_series()
@@ -632,6 +657,8 @@ def main() -> None:
     closed_env = os.environ.get("CLOSED")
     closed, should_mark_init = _resolve_closed_flag(closed_env)
     limit = _parse_int(os.environ.get("LIMIT"))
+    connect_timeout_seconds = _parse_int(os.environ.get("DB_CONNECT_TIMEOUT_SECONDS")) or 5
+    connect_retry_seconds = _parse_int(os.environ.get("DB_CONNECT_RETRY_SECONDS")) or 5
 
     # Scheduling controls
     interval_seconds = _parse_int(os.environ.get("REFRESH_INTERVAL_SECONDS")) or 43200  # default 12h
@@ -649,6 +676,8 @@ def main() -> None:
                 port=port,
                 user=user,
                 password=password,
+                connect_timeout_seconds=connect_timeout_seconds,
+                connect_retry_seconds=connect_retry_seconds,
             )
         except Exception as exc:
             _log(f"ERROR during load: {exc}", error=True)
