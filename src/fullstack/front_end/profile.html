@@ -5,13 +5,464 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>OBAnalyzer — My Profile</title>
   <link rel="stylesheet" href="styles.css" />
-  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="shared.js" type="text/babel"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+  <!-- Shared design system -->
+  <script type="text/babel">
+window.C = {
+  bg: "#0a0e14", surface: "#111820", border: "#1e2d3d",
+  accent: "#00d084", accentD: "#00a866", amber: "#f5a623",
+  red: "#ff4d6d", blue: "#6eb5ff", purple: "#b97cff",
+  text: "#c9d8e8", muted: "#4a6070", white: "#e8f4ff"
+};
+
+window.Logo = ({ size = 16 }) => (
+  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <svg width={size * 1.6} height={size * 1.6} viewBox="0 0 26 26">
+      <rect x="1"  y="10" width="4" height="14" fill={window.C.accent} rx="1" />
+      <rect x="7"  y="6"  width="4" height="18" fill={window.C.accent} opacity=".7" rx="1" />
+      <rect x="13" y="2"  width="4" height="22" fill={window.C.accent} rx="1" />
+      <rect x="19" y="8"  width="4" height="16" fill={window.C.accent} opacity=".5" rx="1" />
+    </svg>
+    <span style={{ fontFamily: "'JetBrains Mono'", fontWeight: 600, fontSize: size, color: window.C.white, letterSpacing: 1 }}>
+      OB<span style={{ color: window.C.accent }}>Analyzer</span>
+    </span>
+  </div>
+);
+
+window.Tag = ({ children, color }) => {
+  const col = color || window.C.accent;
+  return (
+    <span style={{
+      fontFamily: "'JetBrains Mono'", fontSize: 10, color: col,
+      background: `${col}18`, border: `1px solid ${col}40`,
+      borderRadius: 4, padding: "2px 8px", letterSpacing: 1
+    }}>
+      {children}
+    </span>
+  );
+};
+
+window.Input = ({ label, type = "text", placeholder, icon, ...props }) => (
+  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <label style={{ fontSize: 12, color: window.C.muted, letterSpacing: 0.5, textTransform: "uppercase" }}>{label}</label>
+    <div style={{ position: "relative" }}>
+      {icon && (
+        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: window.C.muted, fontSize: 14 }}>
+          {icon}
+        </span>
+      )}
+      <input
+        type={type}
+        placeholder={placeholder}
+        {...props}
+        style={{
+          width: "100%", background: window.C.bg, border: `1px solid ${window.C.border}`,
+          borderRadius: 6, padding: icon ? "10px 12px 10px 36px" : "10px 12px",
+          color: window.C.text, fontSize: 14, outline: "none", transition: "border-color .2s"
+        }}
+        onFocus={e => e.target.style.borderColor = window.C.accent}
+        onBlur={e => e.target.style.borderColor = window.C.border}
+      />
+    </div>
+  </div>
+);
+
+window.Btn = ({ children, variant = "primary", onClick, fullWidth, style, disabled, ...props }) => {
+  const styles = {
+    primary: { background: disabled ? window.C.muted : window.C.accent, color: "#000", fontWeight: 600 },
+    ghost:   { background: "transparent", color: disabled ? window.C.muted : window.C.text, border: `1px solid ${window.C.border}` }
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      {...props}
+      style={{
+        ...styles[variant],
+        padding: "11px 22px", borderRadius: 6, fontSize: 14,
+        cursor: disabled ? "not-allowed" : "pointer",
+        width: fullWidth ? "100%" : "auto",
+        border: styles[variant].border || "none",
+        transition: "opacity .15s", fontFamily: "'DM Sans'",
+        ...style
+      }}
+      onMouseEnter={e => !disabled && (e.currentTarget.style.opacity = ".85")}
+      onMouseLeave={e => !disabled && (e.currentTarget.style.opacity = "1")}
+    >
+      {children}
+    </button>
+  );
+};
+
+window.candleData  = [38,42,40,55,50,62,58,70,65,72,68,75,71,80,77,85,82,78,84,88,83,91,87,94,90,96,92,88,95,97];
+window.probHistory = [55,57,53,60,62,58,61,65,63,67,64,66,68,62,65,69,70,67,71,68,72,70,68,73,75,72,74,71,73,62];
+
+  </script>
+  <!-- Security logger (plain JS, no Babel needed) -->
+  <script>
+// ─── OBAnalyzer Frontend Logger ───────────────────────────────────────────────
+// Sends security-relevant client events to POST /api/analytics/logs/client
+// All entries follow the schema defined in log_design.md
+// Server stamps the final datetime — client timestamp is advisory only.
+
+const LOG_ENDPOINT = 'https://api.yourbackend.com/api/analytics/logs/client';
+
+// Sanitise a string value to prevent log injection (CR, LF, delimiters)
+const sanitize = (val) => {
+  if (typeof val !== 'string') return val;
+  return val.replace(/[\r\n\t|;]/g, '_').substring(0, 512);
+};
+
+// Build a base log entry — fields match the schema in log_design.md
+const buildEntry = (event, level, description, extra = {}) => ({
+  clientTime:  new Date().toISOString(),        // advisory only — server re-stamps
+  appid:       'obanalyzer.frontend',
+  level:       sanitize(level),
+  event:       sanitize(event),
+  userId:      sanitize(localStorage.getItem('ob_user_name') || 'anonymous'),
+  userRole:    sanitize(localStorage.getItem('ob_user_role')  || 'unknown'),
+  outcome:     sanitize(extra.outcome || 'unknown'),
+  description: sanitize(description),
+  ...Object.fromEntries(
+    Object.entries(extra)
+      .filter(([k]) => k !== 'outcome')
+      .map(([k, v]) => [k, sanitize(String(v))])
+  ),
+});
+
+// Fire-and-forget POST — logging failures must never break the application
+const send = async (entry) => {
+  try {
+    await fetch(LOG_ENDPOINT, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('jwt_token') || ''}`,
+      },
+      body: JSON.stringify(entry),
+    });
+  } catch (_) {
+    // Silently swallow — logging failure must not surface to user or crash UI
+  }
+};
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+window.Logger = {
+
+  // Authentication
+  loginAttempt:  (email) =>
+    send(buildEntry('authn_login_attempt', 'INFO',
+      'User initiated login', { endpoint: 'POST /v1/auth/login', outcome: 'attempt' })),
+
+  loginSuccess:  () =>
+    send(buildEntry('authn_login_success', 'INFO',
+      'User authenticated successfully via MFA', { endpoint: 'POST /v1/auth/verify-mfa', outcome: 'success' })),
+
+  loginFailure:  (reason) =>
+    send(buildEntry('authn_login_failure', 'WARN',
+      'Authentication failed: ' + (reason || 'unknown'), { endpoint: 'POST /v1/auth/verify-mfa', outcome: 'failure' })),
+
+  logout: () =>
+    send(buildEntry('authn_logout', 'INFO',
+      'User signed out', { outcome: 'success' })),
+
+  // Registration
+  registerAttempt: () =>
+    send(buildEntry('authn_register_attempt', 'INFO',
+      'New account registration initiated', { endpoint: 'POST /v1/auth/register', outcome: 'attempt' })),
+
+  registerSuccess: () =>
+    send(buildEntry('authn_register_success', 'INFO',
+      'Account registered and verified', { outcome: 'success' })),
+
+  // Authorisation
+  adminAccess: () =>
+    send(buildEntry('authz_admin_access', 'INFO',
+      'Admin panel accessed', { endpoint: 'admin.html', outcome: 'success' })),
+
+  adminRedirect: () =>
+    send(buildEntry('authz_redirect', 'WARN',
+      'Non-admin user redirected from admin panel', { endpoint: 'admin.html', outcome: 'blocked' })),
+
+  // Trading
+  orderAttempt: (market, size) =>
+    send(buildEntry('order_execute_attempt', 'INFO',
+      'Order execution requested', { endpoint: 'POST /v1/orders/execute', market, size, outcome: 'attempt' })),
+
+  orderSuccess: (market, size) =>
+    send(buildEntry('order_execute_success', 'INFO',
+      'Order executed successfully', { endpoint: 'POST /v1/orders/execute', market, size, outcome: 'success' })),
+
+  orderFailure: (market, reason) =>
+    send(buildEntry('order_execute_failure', 'WARN',
+      'Order execution failed: ' + (reason || 'unknown'), { market, outcome: 'failure' })),
+
+  // Billing
+  subscribeAttempt: (plan, cycle) =>
+    send(buildEntry('subscription_upgrade_attempt', 'INFO',
+      'Subscription upgrade initiated', { plan, cycle, outcome: 'attempt' })),
+
+  subscribeSuccess: (plan) =>
+    send(buildEntry('subscription_upgrade_success', 'INFO',
+      'Subscription upgraded', { plan, outcome: 'success' })),
+
+  // Reports
+  reportRequest: (template, format) =>
+    send(buildEntry('report_generate_request', 'INFO',
+      'Report generation requested', { template, format, outcome: 'attempt' })),
+
+  // Client errors
+  clientError: (message, source) =>
+    send(buildEntry('client_error', 'ERROR',
+      'Unhandled client error', { message: message || 'unknown', source: source || 'unknown', outcome: 'error' })),
+};
+
+// Global error handler — catches unhandled JS errors across all pages
+window.onerror = (message, source, lineno) => {
+  window.Logger.clientError(message, source + ':' + lineno);
+  return false; // Don't suppress the error from the console
+};
+
+window.onunhandledrejection = (event) => {
+  window.Logger.clientError('Unhandled promise rejection: ' + event.reason, 'promise');
+};
+
+  </script>
 </head>
 <body>
   <div id="app-root"></div>
-  <script src="profile.js" type="text/babel"></script>
+  <script type="text/babel">
+const { C, Logo, Btn, Tag } = window;
+const { useState, useEffect } = React;
+
+const ProfileScreen = () => {
+  const [userName, setUserName]   = useState("Trader");
+  const [activeTab, setActiveTab] = useState('edit_profile');
+  const [isLoading, setIsLoading] = useState(true);
+  const [userStats, setUserStats] = useState({
+    email: "trader@example.com", memberSince: "Nov 2025",
+    snapshots: "0", replays: "0", tickers: "0", daysActive: "0"
+  });
+  const [activities, setActivities] = useState([]);
+
+  useEffect(() => {
+    const savedName = localStorage.getItem('ob_user_name');
+    if (savedName) setUserName(savedName);
+  }, []);
+
+  // GET /v1/user/profile + GET /v1/user/activities — load account stats and activity log
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      // try {
+      //   const headers = { 'Authorization': `Bearer ${localStorage.getItem('jwt_token')}` };
+      //   const [profileRes, activityRes] = await Promise.all([
+      //     fetch('https://api.yourbackend.com/v1/user/profile', { headers }),
+      //     fetch('https://api.yourbackend.com/v1/user/activities', { headers })
+      //   ]);
+      //   setUserStats(await profileRes.json());
+      //   setActivities(await activityRes.json());
+      //   setIsLoading(false);
+      // } catch (err) { console.error(err); }
+
+      setTimeout(() => {
+        setUserStats({ email: "trader@example.com", memberSince: "Nov 2025", snapshots: "1,240", replays: "87", tickers: "6", daysActive: "98" });
+        setActivities([
+          { date: "Mar 1, 2026",  event: "Pro plan renewed" },
+          { date: "Feb 22, 2026", event: "Password changed" },
+          { date: "Feb 5, 2026",  event: "CSV export downloaded" },
+          { date: "Dec 3, 2025",  event: "Upgraded Free → Pro" },
+          { date: "Nov 20, 2025", event: "Account created" }
+        ]);
+        setIsLoading(false);
+      }, 600);
+    };
+
+    fetchProfileData();
+  }, []);
+
+  // PUT /v1/user/update — persist first/last name change; sync localStorage display name
+  const handleSaveChanges = async () => {
+    const firstName = document.getElementById("input-fname").value;
+    const lastName  = document.getElementById("input-lname").value;
+    const newName   = `${firstName} ${lastName}`.trim();
+
+    // try {
+    //   await fetch('https://api.yourbackend.com/v1/user/update', {
+    //     method: 'PUT',
+    //     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('jwt_token')}` },
+    //     body: JSON.stringify({ firstName, lastName })
+    //   });
+    // } catch (err) { console.error(err); return; }
+
+    setUserName(newName);
+    localStorage.setItem('ob_user_name', newName);
+    alert("Profile updated successfully!");
+  };
+
+  const userHandle = `@${userName.toLowerCase().replace(/\s+/g, '')}`;
+
+  const sidebarMenu = [
+    { id: 'edit_profile',    label: 'Edit Profile' },
+    { id: 'change_password', label: 'Change Password' },
+    { id: 'update_email',    label: 'Update Email' },
+    { id: 'notifications',   label: 'Notifications' },
+    { id: 'api_keys',        label: 'API Keys' },
+    { id: 'delete_account',  label: 'Delete Account', isDanger: true }
+  ];
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: C.bg, color: C.white, fontFamily: "'DM Sans'" }}>
+
+      <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 24px", background: "rgba(18,18,18,0.8)", backdropFilter: "blur(10px)", borderBottom: `1px solid ${C.border}`, zIndex: 100 }}>
+        <Logo size={14} />
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <Btn variant="ghost" onClick={() => window.location.href = 'menu.html'}>← Menu</Btn>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 12px", background: `${C.accent}10`, borderRadius: 20, border: `1px solid ${C.accent}30` }}>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>{userName}</span>
+            <div style={{ width: 24, height: 24, borderRadius: "50%", background: C.accent, color: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800 }}>{userName[0]}</div>
+          </div>
+        </div>
+      </nav>
+
+      <main style={{ flex: 1, padding: "40px 32px", maxWidth: 1200, margin: "0 auto", width: "100%", display: "flex", gap: 32 }}>
+
+        <aside style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 24 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, letterSpacing: 1, marginBottom: 12, paddingLeft: 12 }}>ACCOUNT SETTINGS</div>
+            {sidebarMenu.map(item => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                style={{ textAlign: "left", padding: "12px 16px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 500, transition: "all 0.2s", background: activeTab === item.id ? C.surface : "transparent", color: item.isDanger ? C.red : (activeTab === item.id ? C.white : C.muted), borderLeft: activeTab === item.id ? `3px solid ${item.isDanger ? C.red : C.accent}` : `3px solid transparent` }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginTop: "auto" }}>
+            <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, letterSpacing: 1, marginBottom: 12 }}>CURRENT PLAN</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <span style={{ fontSize: 18, fontWeight: 700 }}>Pro</span>
+              <Tag color={C.accent}>ACTIVE</Tag>
+            </div>
+            <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>$9.99 / month</div>
+            <Btn fullWidth onClick={() => window.location.href = 'membership.html'} style={{ fontSize: 12, padding: "8px" }}>
+              Upgrade to Elite
+            </Btn>
+          </div>
+        </aside>
+
+        <section style={{ flex: 1, display: "flex", flexDirection: "column", gap: 24 }}>
+
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 32, display: "flex", alignItems: "center", gap: 24 }}>
+            <div style={{ width: 80, height: 80, borderRadius: "50%", background: `linear-gradient(135deg, ${C.accent}, ${C.blue})`, color: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, fontWeight: 700, boxShadow: `0 0 30px ${C.accent}40` }}>
+              {userName[0]}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+                <h1 style={{ fontSize: 28, margin: 0, fontWeight: 700 }}>{userName}</h1>
+                <Tag color={C.accent}>PRO</Tag>
+              </div>
+              <div style={{ fontSize: 14, color: C.muted, display: "flex", gap: 16 }}>
+                <span>{userStats.email}</span>
+                <span>{userHandle}</span>
+                <span>Member since {userStats.memberSince}</span>
+              </div>
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div style={{ padding: "40px", textAlign: "center", background: C.bg, border: `1px dashed ${C.border}`, borderRadius: 12, color: C.muted }}>
+              Loading analytics from server...
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16 }}>
+              {[
+                { val: userStats.snapshots,  label: "Snapshots Viewed" },
+                { val: userStats.replays,    label: "Replays Run" },
+                { val: userStats.tickers,    label: "Saved Tickers" },
+                { val: userStats.daysActive, label: "Days Active" }
+              ].map((stat, i) => (
+                <div key={i} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, textAlign: "center" }}>
+                  <div style={{ fontSize: 24, fontFamily: "'JetBrains Mono'", fontWeight: 700, color: C.white, marginBottom: 4 }}>{stat.val}</div>
+                  <div style={{ fontSize: 12, color: C.muted }}>{stat.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 24, flex: 1 }}>
+
+            <div style={{ flex: 1.5, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 32 }}>
+              <h3 style={{ fontSize: 18, margin: "0 0 24px 0" }}>{sidebarMenu.find(m => m.id === activeTab)?.label}</h3>
+
+              {activeTab === 'edit_profile' && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div style={{ display: "flex", gap: 16 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 8 }}>FIRST NAME</label>
+                      <input id="input-fname" type="text" defaultValue={userName.split(' ')[0] || ''} style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, padding: 12, borderRadius: 8, color: C.white, outline: "none" }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 8 }}>LAST NAME</label>
+                      <input id="input-lname" type="text" defaultValue={userName.split(' ').slice(1).join(' ') || ''} style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, padding: 12, borderRadius: 8, color: C.white, outline: "none" }} />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 8 }}>USERNAME</label>
+                    <input type="text" disabled defaultValue={userHandle} style={{ width: "100%", background: `${C.bg}80`, border: `1px solid ${C.border}`, padding: 12, borderRadius: 8, color: C.muted, outline: "none", cursor: "not-allowed" }} />
+                  </div>
+                  <Btn style={{ marginTop: 16, alignSelf: "flex-start" }} onClick={handleSaveChanges}>Save Changes</Btn>
+                </div>
+              )}
+
+              {activeTab !== 'edit_profile' && (
+                <div style={{ color: C.muted, fontSize: 14, padding: "40px 0", textAlign: "center" }}>
+                  <span style={{ fontSize: 32, display: "block", marginBottom: 16 }}>⚙️</span>
+                  Settings for {sidebarMenu.find(m => m.id === activeTab)?.label} will connect to the backend API.
+                </div>
+              )}
+            </div>
+
+            <div style={{ flex: 1, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16, padding: 24, display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, letterSpacing: 1 }}>RECENT ACTIVITY</div>
+              </div>
+
+              {isLoading ? (
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted, fontSize: 12 }}>
+                  Loading logs...
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 20, position: "relative" }}>
+                  <div style={{ position: "absolute", left: 5, top: 10, bottom: 10, width: 1, background: C.border }} />
+                  {activities.map((act, i) => (
+                    <div key={i} style={{ display: "flex", gap: 16, position: "relative" }}>
+                      <div style={{ width: 11, height: 11, borderRadius: "50%", background: i === 0 ? C.accent : C.surface, border: `2px solid ${C.bg}`, zIndex: 1, marginTop: 4 }} />
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 500, color: i === 0 ? C.white : C.muted }}>{act.event}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{act.date}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </section>
+
+      </main>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('app-root')).render(<ProfileScreen />);
+
+  </script>
 </body>
 </html>
