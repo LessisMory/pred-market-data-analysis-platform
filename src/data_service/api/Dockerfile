@@ -1,19 +1,16 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc libpq-dev \
- && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
+COPY api/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . /app/api/
+COPY api api
 
-ENV PYTHONPATH=/app
-ENV POSTGRES_DSN=postgresql://postgres:postgres@postgres:5432/postgres
+ENV PYTHONUNBUFFERED=1 \
+    API_HOST=0.0.0.0 \
+    API_PORT=8000
 
 EXPOSE 8000
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn api.api:app --host ${API_HOST} --port ${API_PORT}"]
