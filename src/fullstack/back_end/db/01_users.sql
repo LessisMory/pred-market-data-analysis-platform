@@ -12,10 +12,8 @@ CREATE TABLE IF NOT EXISTS users (
     last_login     TIMESTAMP
 );
 
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_phone ON users(phone);
-CREATE INDEX idx_users_status ON users(status);
-CREATE INDEX idx_users_plan ON users(plan);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 
 -- User Session table
 CREATE TABLE IF NOT EXISTS user_session (
@@ -47,16 +45,6 @@ CREATE TABLE IF NOT EXISTS user_profile (
     preferences_json JSONB
 );
 
--- MFA codes table (for SMS verification)
-CREATE TABLE IF NOT EXISTS mfa_code (
-    id             SERIAL PRIMARY KEY,
-    user_id        INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    code           VARCHAR(6) NOT NULL,
-    expires_at     TIMESTAMP NOT NULL,
-    used           BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at     TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
 -- Password Reset Tokens
 CREATE TABLE IF NOT EXISTS password_resets (
     reset_id       BIGSERIAL PRIMARY KEY,
@@ -71,5 +59,5 @@ CREATE TABLE IF NOT EXISTS password_resets (
         ON DELETE CASCADE
 );
 
-CREATE INDEX idx_password_resets_user_id ON password_resets(user_id);
-CREATE INDEX idx_password_resets_token ON password_resets(reset_token);
+CREATE INDEX IF NOT EXISTS idx_password_resets_user_id ON password_resets(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_resets_token ON password_resets(reset_token);

@@ -10,9 +10,8 @@ CREATE TABLE IF NOT EXISTS user_activity (
         ON DELETE CASCADE
 );
 
-CREATE INDEX idx_user_activity_user_id ON user_activity(user_id);
-CREATE INDEX idx_user_activity_type ON user_activity(activity_type);
-CREATE INDEX idx_user_activity_time ON user_activity(created_at);
+CREATE INDEX IF NOT EXISTS idx_user_activity_user_id ON user_activity(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_activity_time ON user_activity(created_at);
 
 -- User Stats table (aggregated)
 CREATE TABLE IF NOT EXISTS user_stats (

@@ -1,5 +1,5 @@
-const { C, Logo, Input, Btn } = window;
-const { useState } = React;
+const { C, Logo, Btn } = window;
+const { useEffect, useState } = React;
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24">
@@ -10,18 +10,12 @@ const GoogleIcon = () => (
   </svg>
 );
 
-const GithubIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill={C.white}>
-    <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
-  </svg>
-);
-
 const ValidatedInput = ({ label, error, ...props }) => (
-  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-    <label style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>{label}</label>
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+    <label style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 1 }}>{label}</label>
     <input
       {...props}
-      style={{ width: "100%", background: C.bg, border: `1px solid ${error ? C.red : C.border}`, borderRadius: 6, padding: "12px 14px", color: C.white, outline: "none", fontSize: 14, transition: "border-color 0.15s" }}
+      style={{ width: '100%', background: C.bg, border: `1px solid ${error ? C.red : C.border}`, borderRadius: 6, padding: '12px 14px', color: C.white, outline: 'none', fontSize: 14, transition: 'border-color 0.15s' }}
       onFocus={e => !error && (e.target.style.borderColor = C.accent)}
       onBlur={e => !error && (e.target.style.borderColor = error ? C.red : C.border)}
     />
@@ -30,18 +24,33 @@ const ValidatedInput = ({ label, error, ...props }) => (
 );
 
 const RegisterScreen = () => {
-  const [step, setStep]         = useState('account');
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', password: '', phone: '', agree: false });
-  const [smsCode, setSmsCode]   = useState(new Array(6).fill(""));
-  const [errors, setErrors]     = useState({});
+  const [errors, setErrors] = useState({});
   const [passStrength, setPassStrength] = useState({ score: 0, text: 'Too Short', color: C.muted, bars: 0 });
+  const [authError, setAuthError] = useState('');
+
+  useEffect(() => {
+    window.FirebaseAuthClient.init().catch((err) => {
+      console.error(err);
+      setAuthError(err.message || 'Google sign-up is not available right now. Email registration still works.');
+    });
+  }, []);
+
+  const storeSessionAndRedirect = (data) => {
+    const resolvedName = data.user?.name || [data.user?.firstName, data.user?.lastName].filter(Boolean).join(' ').trim() || 'User';
+    localStorage.setItem('jwt_token', data.token);
+    localStorage.setItem('ob_user_name', resolvedName);
+    localStorage.setItem('ob_user_role', data.user?.role || 'user');
+    localStorage.setItem('ob_auth_source', data.user?.authProvider || 'password');
+    window.location.href = data.user?.role === 'admin' ? 'admin.html' : 'menu.html';
+  };
 
   const handleNameChange = (e, field) => {
     const value = e.target.value;
     const nameRegex = /^[A-Za-z'-]*$/;
     const newErrors = { ...errors };
     if (!nameRegex.test(value)) {
-      newErrors[field] = "Names cannot contain numbers or special symbols.";
+      newErrors[field] = 'Names cannot contain numbers or special symbols.';
     } else {
       delete newErrors[field];
     }
@@ -67,230 +76,138 @@ const RegisterScreen = () => {
     }
 
     let score = 1;
-    if (/[a-z]/.test(pass))      score++;
-    if (/[A-Z]/.test(pass))      score++;
-    if (/[0-9]/.test(pass))      score++;
+    if (/[a-z]/.test(pass)) score++;
+    if (/[A-Z]/.test(pass)) score++;
+    if (/[0-9]/.test(pass)) score++;
     if (/[^A-Za-z0-9]/.test(pass)) score++;
 
-    if (score <= 2)     setPassStrength({ score, text: 'Weak: Institutional Risk',  color: C.red,    bars: 1 });
-    else if (score === 3) setPassStrength({ score, text: 'Fair: Vulnerable',           color: C.amber,  bars: 2 });
-    else if (score === 4) setPassStrength({ score, text: 'Good: Acceptable',           color: C.blue,   bars: 3 });
-    else                setPassStrength({ score, text: 'Strong: Secured',             color: C.accent, bars: 4 });
+    if (score <= 2) setPassStrength({ score, text: 'Weak: Institutional Risk', color: C.red, bars: 1 });
+    else if (score === 3) setPassStrength({ score, text: 'Fair: Vulnerable', color: C.amber, bars: 2 });
+    else if (score === 4) setPassStrength({ score, text: 'Good: Acceptable', color: C.blue, bars: 3 });
+    else setPassStrength({ score, text: 'Strong: Secured', color: C.accent, bars: 4 });
 
     setErrors(newErrors);
   };
 
-  // POST /v1/auth/register — create user record, advance to phone binding on success
-  const validateAndContinue = async () => {
+  const handleEmailRegistration = async () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const nameRegex  = /^[A-Za-z'-]+$/;
+    const nameRegex = /^[A-Za-z'-]+$/;
     const finalErrors = {};
 
-    if (!formData.firstName || !nameRegex.test(formData.firstName)) finalErrors.firstName = "Valid First Name is required.";
-    if (!formData.lastName  || !nameRegex.test(formData.lastName))  finalErrors.lastName  = "Valid Last Name is required.";
-    if (!formData.email     || !emailRegex.test(formData.email))    finalErrors.email     = "Institutional Email format is invalid.";
-    if (passStrength.score < 4)                                     finalErrors.password  = "Security Policy: Password must be 'Good' strength or higher.";
-    if (!formData.agree)                                             finalErrors.agree     = "Required.";
+    if (!formData.firstName || !nameRegex.test(formData.firstName)) finalErrors.firstName = 'Valid First Name is required.';
+    if (!formData.lastName || !nameRegex.test(formData.lastName)) finalErrors.lastName = 'Valid Last Name is required.';
+    if (!formData.email || !emailRegex.test(formData.email)) finalErrors.email = 'Institutional Email format is invalid.';
+    if (passStrength.score < 4) finalErrors.password = "Security Policy: Password must be 'Good' strength or higher.";
+    if (!formData.agree) finalErrors.agree = 'Required.';
 
     setErrors(finalErrors);
     if (Object.keys(finalErrors).length > 0) return;
 
-    // try {
-    //   const res = await fetch('https://api.yourbackend.com/v1/auth/register', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ firstName: formData.firstName, lastName: formData.lastName, email: formData.email, password: formData.password })
-    //   });
-    //   if (!res.ok) throw new Error("Email may already exist");
-    //   setStep('phone');
-    // } catch (err) { alert(err.message); }
+    try {
+      const res = await fetch('/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email.trim(),
+          password: formData.password,
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          name: [formData.firstName, formData.lastName].filter(Boolean).join(' ').trim(),
+        }),
+      });
+      const data = await res.json();
 
-    setStep('phone');
-  };
+      if (!res.ok || !data.token || !data.user) {
+        throw new Error(data.error || 'Registration failed');
+      }
 
-  // POST /v1/auth/send-sms — trigger SMS dispatch to the provided phone number
-  const handleSendSMS = async () => {
-    // try {
-    //   await fetch('https://api.yourbackend.com/v1/auth/send-sms', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ email: formData.email, phone: formData.phone })
-    //   });
-    //   setStep('verify');
-    // } catch (err) { alert("Failed to send SMS"); }
-
-    setStep('verify');
-  };
-
-  const handleCodeChange = (e, index) => {
-    const value = e.target.value;
-    if (isNaN(value)) return;
-    const newCode = [...smsCode];
-    newCode[index] = value.substring(value.length - 1);
-    setSmsCode(newCode);
-    if (value !== "" && index < 5) {
-      document.getElementById(`reg-sms-${index + 1}`)?.focus();
+      storeSessionAndRedirect(data);
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Registration failed');
     }
   };
 
-  // POST /v1/auth/verify-mfa — confirm phone ownership, finalize account and redirect
-  const handleFinalize = async () => {
-    const mfaCode = smsCode.join("");
-
-    // try {
-    //   const res = await fetch('https://api.yourbackend.com/v1/auth/verify-mfa', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ email: formData.email, phone: formData.phone, code: mfaCode })
-    //   });
-    //   const data = await res.json();
-    //   if (data.token) {
-    //     localStorage.setItem('jwt_token', data.token);
-    //     localStorage.setItem('ob_user_name', formData.firstName);
-    //     window.location.href = 'menu.html';
-    //   } else { alert("Invalid verification code"); }
-    // } catch (err) { console.error(err); }
-
-    const userDB = JSON.parse(localStorage.getItem('ob_user_db') || '{}');
-    userDB[formData.email.toLowerCase()] = formData.firstName;
-    localStorage.setItem('ob_user_db', JSON.stringify(userDB));
-    localStorage.setItem('ob_user_name', formData.firstName);
-    window.location.href = 'menu.html';
+  const handleOAuthRegister = async (provider) => {
+    try {
+      await window.FirebaseAuthClient.signInWithProvider(provider);
+      const user = await window.FirebaseAuthClient.syncSession();
+      window.location.href = user.role === 'admin' ? 'admin.html' : 'menu.html';
+    } catch (err) {
+      console.error(err);
+      alert(err.message || `${provider} sign-in failed`);
+    }
   };
 
-  // OAuth path — skip email/password, go straight to phone binding
-  const handleOAuthRegister = () => setStep('phone');
-
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: C.bg }}>
-      <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 40px", borderBottom: `1px solid ${C.border}`, background: C.surface }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: C.bg }}>
+      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 40px', borderBottom: `1px solid ${C.border}`, background: C.surface }}>
         <Logo size={15} />
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <span style={{ fontSize: 13, color: C.muted }}>Already have an account?</span>
           <Btn variant="ghost" onClick={() => window.location.href = 'login.html'}>Sign In</Btn>
         </div>
       </nav>
 
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 24px", background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${C.accent}08 0%, transparent 80%), ${C.bg}` }}>
-        <div style={{ width: 460, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "40px 36px", boxShadow: `0 20px 60px rgba(0,0,0,.4)`, minHeight: "540px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 24px', background: `radial-gradient(ellipse 50% 50% at 50% 50%, ${C.accent}08 0%, transparent 80%), ${C.bg}` }}>
+        <div style={{ width: 460, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '40px 36px', boxShadow: '0 20px 60px rgba(0,0,0,.4)', minHeight: '540px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
 
-          <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ textAlign: 'center', marginBottom: 28 }}>
             <Logo size={18} />
           </div>
 
-          {step === 'account' && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div style={{ textAlign: "center", marginBottom: 6 }}>
-                <div style={{ fontSize: 20, fontWeight: 600, color: C.white, marginBottom: 4 }}>Initialize Terminal Access</div>
-                <div style={{ fontSize: 13, color: C.muted }}>Establish institutional identity to start analyzing prediction markets.</div>
-              </div>
-
-              <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={handleOAuthRegister} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, background: "#fff", color: "#3c4043", border: "1px solid #dadce0", borderRadius: 8, padding: "12px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>
-                  <GoogleIcon /> Google
-                </button>
-                <button onClick={handleOAuthRegister} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, background: "#24292e", color: C.white, border: "1px solid #444", borderRadius: 8, padding: "12px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans'" }}>
-                  <GithubIcon /> GitHub
-                </button>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0" }}>
-                <div style={{ flex: 1, height: 1, background: C.border }} />
-                <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: 1.5 }}>OR USE WORK EMAIL</span>
-                <div style={{ flex: 1, height: 1, background: C.border }} />
-              </div>
-
-              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <div style={{ flex: 1 }}><ValidatedInput label="First Name" placeholder="Jane" value={formData.firstName} onChange={e => handleNameChange(e, 'firstName')} error={errors.firstName} /></div>
-                <div style={{ flex: 1 }}><ValidatedInput label="Last Name" placeholder="Doe" value={formData.lastName} onChange={e => handleNameChange(e, 'lastName')} error={errors.lastName} /></div>
-              </div>
-
-              <ValidatedInput label="Work Email" placeholder="trader@firm.com" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} error={errors.email} />
-              <ValidatedInput label="Create Password" type="password" placeholder="••••••••" value={formData.password} onChange={handlePasswordChange} error={errors.password} />
-
-              <div style={{ display: "flex", gap: 6, marginTop: -6 }}>
-                {[1, 2, 3, 4].map(b => (
-                  <div key={b} style={{ flex: 1, height: 4, background: b <= passStrength.bars ? passStrength.color : C.border, borderRadius: 2, transition: "background 0.2s" }} />
-                ))}
-              </div>
-              <div style={{ fontSize: 11, color: passStrength.color, marginTop: -5, display: "flex", justifyContent: "space-between", fontFamily: "'JetBrains Mono'" }}>
-                <span>Security Level:</span>
-                <span style={{ fontWeight: 600 }}>{passStrength.text}</span>
-              </div>
-
-              <label style={{ fontSize: 12, color: errors.agree ? C.red : C.muted, display: "flex", gap: 8, alignItems: "center", marginTop: 6, transition: "color 0.15s" }}>
-                <input type="checkbox" checked={formData.agree} onChange={e => setFormData({ ...formData, agree: e.target.checked })} style={{ accentColor: C.accent }} />
-                I agree to the <span style={{ color: C.accent }}>Terms</span> and <span style={{ color: C.accent }}>Privacy Policy</span>.
-              </label>
-              {errors.agree && <div style={{ fontSize: 10, color: C.red, fontFamily: "'JetBrains Mono'" }}>⚠️ {errors.agree}</div>}
-
-              <div style={{ marginTop: 10 }}>
-                <Btn fullWidth onClick={validateAndContinue}>Continue →</Btn>
-              </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ textAlign: 'center', marginBottom: 6 }}>
+              <div style={{ fontSize: 20, fontWeight: 600, color: C.white, marginBottom: 4 }}>Initialize Terminal Access</div>
+              <div style={{ fontSize: 13, color: C.muted }}>Create an account with email and password, or use Google if you prefer.</div>
             </div>
-          )}
 
-          {step === 'phone' && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20, alignItems: "center", textAlign: "center" }}>
-              <div style={{ fontSize: 40, marginBottom: 4 }}>🔒</div>
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 600, color: C.white, marginBottom: 8 }}>Mandatory System Security</div>
-                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, padding: "0 15px" }}>
-                  To establish institutional access, OBAnalyzer requires 2FA on all accounts. Verify your phone number to proceed.
-                </div>
+            {authError && (
+              <div style={{ background: `${C.red}12`, border: `1px solid ${C.red}40`, color: C.red, borderRadius: 8, padding: '10px 12px', fontSize: 12, lineHeight: 1.5 }}>
+                {authError}
               </div>
+            )}
 
-              <div style={{ width: "100%", display: "flex", gap: 10, marginTop: 10 }}>
-                <div style={{ width: 90, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: "12px", color: C.white, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontFamily: "'JetBrains Mono'" }}>US +1</div>
-                <div style={{ flex: 1 }}>
-                  <input
-                    type="tel" placeholder="(555) 000-0000"
-                    value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                    style={{ width: "100%", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: "12px 14px", color: C.white, outline: "none", fontSize: 14, fontFamily: "'JetBrains Mono'" }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ width: "100%", marginTop: 10 }}>
-                <Btn fullWidth onClick={handleSendSMS}>Initialize Verification</Btn>
-              </div>
-              <span style={{ fontSize: 12, color: C.muted, cursor: "pointer", marginTop: 10 }} onClick={() => setStep('account')}>← Back</span>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => handleOAuthRegister('google')} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: '#fff', color: '#3c4043', border: '1px solid #dadce0', borderRadius: 8, padding: '12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: "'DM Sans'" }}>
+                <GoogleIcon /> Google
+              </button>
             </div>
-          )}
 
-          {step === 'verify' && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <div style={{ textAlign: "center", marginBottom: 4 }}>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>💬</div>
-                <div style={{ fontSize: 18, fontWeight: 600, color: C.white, marginBottom: 8 }}>Identity Confirmation</div>
-                <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, maxWidth: 300, margin: "0 auto" }}>
-                  Enter the 6-digit access token sent via SMS to finalize terminal access.
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: 8, justifyContent: "center", margin: "10px 0" }}>
-                {smsCode.map((digit, i) => (
-                  <input
-                    key={i} id={`reg-sms-${i}`} type="text" maxLength="1" value={digit}
-                    onChange={e => handleCodeChange(e, i)}
-                    style={{ width: 44, height: 52, background: C.bg, border: `1px solid ${digit !== "" ? C.accent : C.border}`, borderRadius: 8, textAlign: "center", fontFamily: "'JetBrains Mono'", fontSize: 24, fontWeight: 600, color: C.accent, outline: "none", transition: "border-color 0.2s" }}
-                  />
-                ))}
-              </div>
-
-              <div style={{ textAlign: "center", fontSize: 12, color: C.muted }}>
-                Consumer Lag: <span style={{ fontFamily: "'JetBrains Mono'", color: C.accent }}>3.1s</span> | <span style={{ color: C.accent, cursor: "pointer" }}>Resend Token</span>
-              </div>
-
-              <div style={{ marginTop: 10 }}>
-                <Btn fullWidth onClick={handleFinalize}>Finalize & Access Terminal</Btn>
-              </div>
-
-              <div style={{ textAlign: "center", marginTop: 4 }}>
-                <span style={{ fontSize: 12, color: C.muted, cursor: "pointer" }} onClick={() => setStep('phone')}>← Change identification number</span>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0' }}>
+              <div style={{ flex: 1, height: 1, background: C.border }} />
+              <span style={{ fontSize: 10, color: C.muted, textTransform: 'uppercase', letterSpacing: 1.5 }}>OR USE WORK EMAIL</span>
+              <div style={{ flex: 1, height: 1, background: C.border }} />
             </div>
-          )}
+
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div style={{ flex: 1 }}><ValidatedInput label="First Name" placeholder="Jane" value={formData.firstName} onChange={e => handleNameChange(e, 'firstName')} error={errors.firstName} /></div>
+              <div style={{ flex: 1 }}><ValidatedInput label="Last Name" placeholder="Doe" value={formData.lastName} onChange={e => handleNameChange(e, 'lastName')} error={errors.lastName} /></div>
+            </div>
+
+            <ValidatedInput label="Work Email" placeholder="trader@firm.com" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} error={errors.email} />
+            <ValidatedInput label="Create Password" type="password" placeholder="••••••••" value={formData.password} onChange={handlePasswordChange} error={errors.password} />
+
+            <div style={{ display: 'flex', gap: 6, marginTop: -6 }}>
+              {[1, 2, 3, 4].map((b) => (
+                <div key={b} style={{ flex: 1, height: 4, background: b <= passStrength.bars ? passStrength.color : C.border, borderRadius: 2, transition: 'background 0.2s' }} />
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: passStrength.color, marginTop: -5, display: 'flex', justifyContent: 'space-between', fontFamily: "'JetBrains Mono'" }}>
+              <span>Security Level:</span>
+              <span style={{ fontWeight: 600 }}>{passStrength.text}</span>
+            </div>
+
+            <label style={{ fontSize: 12, color: errors.agree ? C.red : C.muted, display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, transition: 'color 0.15s' }}>
+              <input type="checkbox" checked={formData.agree} onChange={e => setFormData({ ...formData, agree: e.target.checked })} style={{ accentColor: C.accent }} />
+              I agree to the <span style={{ color: C.accent }}>Terms</span> and <span style={{ color: C.accent }}>Privacy Policy</span>.
+            </label>
+            {errors.agree && <div style={{ fontSize: 10, color: C.red, fontFamily: "'JetBrains Mono'" }}>⚠️ {errors.agree}</div>}
+
+            <div style={{ marginTop: 10 }}>
+              <Btn fullWidth onClick={handleEmailRegistration}>Create Account →</Btn>
+            </div>
+          </div>
         </div>
       </div>
     </div>

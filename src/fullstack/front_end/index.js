@@ -1,5 +1,5 @@
 const { C, Logo, Input, Btn } = window;
-const { useState } = React;
+const { useEffect, useState } = React;
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24">
@@ -11,83 +11,98 @@ const GoogleIcon = () => (
 );
 
 const HomeScreen = () => {
-  const [step, setStep]             = useState('login');
-  const [code, setCode]             = useState(new Array(6).fill(""));
-  const [emailValue, setEmailValue] = useState("");
-  const [passwordValue, setPasswordValue] = useState("");
+  const [emailValue, setEmailValue] = useState('');
+  const [passwordValue, setPasswordValue] = useState('');
+  const [authError, setAuthError] = useState('');
 
-  // POST /v1/auth/login — validate credentials, advance to 2FA step on success
+  useEffect(() => {
+    window.FirebaseAuthClient.init().catch((err) => {
+      console.error(err);
+      setAuthError(err.message || 'Google sign-in is not available right now. Email sign-in still works.');
+    });
+  }, []);
+
+  const storeSessionAndRedirect = (data) => {
+    const resolvedName = data.user?.name || [data.user?.firstName, data.user?.lastName].filter(Boolean).join(' ').trim() || 'User';
+    localStorage.setItem('jwt_token', data.token);
+    localStorage.setItem('ob_user_name', resolvedName);
+    localStorage.setItem('ob_user_role', data.user?.role || 'user');
+    localStorage.setItem('ob_auth_source', data.user?.authProvider || 'password');
+    window.location.href = data.user?.role === 'admin' ? 'admin.html' : 'menu.html';
+  };
+
+  const finalizeSignIn = async () => {
+    const user = await window.FirebaseAuthClient.syncSession();
+    window.location.href = user.role === 'admin' ? 'admin.html' : 'menu.html';
+  };
+
+  const looksLikeEmail = (value) => /\S+@\S+\.\S+/.test(value);
+
+  const handleAdminLogin = async () => {
+    const res = await fetch('/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: emailValue.trim(),
+        password: passwordValue,
+      }),
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.token || !data.user) {
+      throw new Error(data.error || 'Invalid admin username or password');
+    }
+
+    storeSessionAndRedirect(data);
+  };
+
   const handleLoginSubmit = async () => {
-    let currentEmail = emailValue;
-    const rawInput = document.querySelector('input[placeholder="trader@example.com"]');
-    if (!currentEmail && rawInput) {
-      currentEmail = rawInput.value;
-      setEmailValue(currentEmail);
-    }
+    try {
+      if (!looksLikeEmail(emailValue)) {
+        await handleAdminLogin();
+        return;
+      }
 
-    // try {
-    //   const res = await fetch('https://api.yourbackend.com/v1/auth/login', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ email: currentEmail, password: passwordValue })
-    //   });
-    //   if (res.ok) { setStep('sms'); } else { alert("Invalid email or password"); }
-    // } catch (err) { console.error(err); }
+      const res = await fetch('/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailValue.trim(),
+          password: passwordValue,
+        }),
+      });
+      const data = await res.json();
 
-    setStep('sms');
-  };
+      if (!res.ok || !data.token || !data.user) {
+        throw new Error(data.error || 'Login failed');
+      }
 
-  const handleCodeChange = (e, index) => {
-    const value = e.target.value;
-    if (isNaN(value)) return;
-    const newCode = [...code];
-    newCode[index] = value.substring(value.length - 1);
-    setCode(newCode);
-    if (value !== "" && index < 5) {
-      document.getElementById(`home-sms-${index + 1}`)?.focus();
+      storeSessionAndRedirect(data);
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Login failed');
     }
   };
 
-  // POST /v1/auth/verify-mfa — exchange 2FA code for JWT, store token + role, redirect by role
-  const handleMfaSubmit = async () => {
-    const currentMail = (emailValue || "").toLowerCase().trim();
-    const mfaCode = code.join("");
-
-    // try {
-    //   const res = await fetch('https://api.yourbackend.com/v1/auth/verify-mfa', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ email: currentMail, code: mfaCode })
-    //   });
-    //   const data = await res.json();
-    //   if (data.token) {
-    //     localStorage.setItem('jwt_token', data.token);
-    //     localStorage.setItem('ob_user_name', data.user.firstName);
-    //     localStorage.setItem('ob_user_role', data.user.role);
-    //     window.location.href = data.user.role === 'admin' ? 'admin.html' : 'menu.html';
-    //   } else { alert("Invalid verification code"); }
-    // } catch (err) { console.error(err); }
-
-    const userDB = JSON.parse(localStorage.getItem('ob_user_db') || '{}');
-    let nameToSave = userDB[currentMail]
-      || (currentMail.includes('@')
-          ? currentMail.split('@')[0].replace(/^./, c => c.toUpperCase())
-          : localStorage.getItem('ob_user_name') || "Jane");
-
-    localStorage.setItem('ob_user_name', nameToSave);
-    localStorage.setItem('ob_user_role', 'user');
-    window.location.href = 'menu.html';
+  const handleOAuthLogin = async (provider) => {
+    try {
+      await window.FirebaseAuthClient.signInWithProvider(provider);
+      await finalizeSignIn();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || `${provider} sign-in failed`);
+    }
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: C.bg }}>
-      <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 40px", borderBottom: `1px solid ${C.border}`, background: C.surface }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: C.bg }}>
+      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 40px', borderBottom: `1px solid ${C.border}`, background: C.surface }}>
         <Logo size={15} />
         <Btn variant="ghost" onClick={() => window.location.href = 'register.html'}>Create Account</Btn>
       </nav>
 
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "60px 40px", background: `radial-gradient(ellipse 60% 50% at 70% 40%, ${C.accent}0d 0%, transparent 70%), ${C.bg}` }}>
-        <div style={{ display: "flex", gap: 80, alignItems: "center", maxWidth: 1060, width: "100%" }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 40px', background: `radial-gradient(ellipse 60% 50% at 70% 40%, ${C.accent}0d 0%, transparent 70%), ${C.bg}` }}>
+        <div style={{ display: 'flex', gap: 80, alignItems: 'center', maxWidth: 1060, width: '100%' }}>
 
           <div style={{ flex: 1 }}>
             <h1 style={{ fontFamily: "'DM Sans'", fontWeight: 300, fontSize: 44, lineHeight: 1.2, color: C.white, marginBottom: 16 }}>
@@ -101,54 +116,35 @@ const HomeScreen = () => {
             <Btn variant="ghost" onClick={() => window.location.href = 'register.html'}>Create Free Account</Btn>
           </div>
 
-          <div style={{ width: 380, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "32px 30px", flexShrink: 0, boxShadow: `0 20px 60px rgba(0,0,0,.4)`, minHeight: "480px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            {step === 'login' ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div style={{ textAlign: "center", marginBottom: 6 }}>
-                  <div style={{ fontSize: 20, fontWeight: 600, color: C.white }}>Terminal Access</div>
-                </div>
-
-                <button onClick={handleLoginSubmit} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, background: "#fff", color: "#3c4043", border: "1px solid #dadce0", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                  <GoogleIcon /> Continue with Google
-                </button>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "2px 0" }}>
-                  <div style={{ flex: 1, height: 1, background: C.border }} />
-                  <span style={{ fontSize: 10, color: C.muted }}>OR EMAIL</span>
-                  <div style={{ flex: 1, height: 1, background: C.border }} />
-                </div>
-
-                <Input label="EMAIL" placeholder="trader@example.com" icon="✉" value={emailValue} onChange={e => setEmailValue(e.target.value)} />
-                <Input label="PASSWORD" type="password" placeholder="••••••••" icon="🔒" value={passwordValue} onChange={e => setPasswordValue(e.target.value)} />
-
-                <div style={{ marginTop: 4 }}>
-                  <Btn fullWidth onClick={handleLoginSubmit}>Sign In</Btn>
-                </div>
+          <div style={{ width: 380, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '32px 30px', flexShrink: 0, boxShadow: '0 20px 60px rgba(0,0,0,.4)', minHeight: '480px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ textAlign: 'center', marginBottom: 6 }}>
+                <div style={{ fontSize: 20, fontWeight: 600, color: C.white }}>Terminal Access</div>
               </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 32, marginBottom: 10 }}>💬</div>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: C.white }}>Security Verification</div>
-                </div>
 
-                <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-                  {code.map((digit, i) => (
-                    <input
-                      key={i} id={`home-sms-${i}`} type="text" maxLength="1" value={digit}
-                      onChange={e => handleCodeChange(e, i)}
-                      style={{ width: 40, height: 48, background: C.bg, border: `1px solid ${digit !== "" ? C.accent : C.border}`, borderRadius: 8, textAlign: "center", color: C.accent, outline: "none", fontSize: 20, fontWeight: "bold" }}
-                    />
-                  ))}
+              {authError && (
+                <div style={{ background: `${C.red}12`, border: `1px solid ${C.red}40`, color: C.red, borderRadius: 8, padding: '10px 12px', fontSize: 12, lineHeight: 1.5 }}>
+                  {authError}
                 </div>
+              )}
 
-                <Btn fullWidth onClick={handleMfaSubmit}>Authenticate</Btn>
+              <button onClick={() => handleOAuthLogin('google')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, background: '#fff', color: '#3c4043', border: '1px solid #dadce0', borderRadius: 8, padding: '10px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                <GoogleIcon /> Continue with Google
+              </button>
 
-                <div style={{ textAlign: "center", marginTop: 4 }}>
-                  <span style={{ fontSize: 12, color: C.muted, cursor: "pointer" }} onClick={() => setStep('login')}>← Back to login</span>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '2px 0' }}>
+                <div style={{ flex: 1, height: 1, background: C.border }} />
+                <span style={{ fontSize: 10, color: C.muted }}>OR EMAIL</span>
+                <div style={{ flex: 1, height: 1, background: C.border }} />
               </div>
-            )}
+
+              <Input label="EMAIL" placeholder="trader@example.com" icon="✉" value={emailValue} onChange={e => setEmailValue(e.target.value)} />
+              <Input label="PASSWORD" type="password" placeholder="••••••••" icon="🔒" value={passwordValue} onChange={e => setPasswordValue(e.target.value)} />
+
+              <div style={{ marginTop: 4 }}>
+                <Btn fullWidth onClick={handleLoginSubmit}>Sign In</Btn>
+              </div>
+            </div>
           </div>
         </div>
       </div>

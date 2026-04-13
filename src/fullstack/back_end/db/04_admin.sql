@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS admin_actions (
         ON DELETE SET NULL
 );
 
-CREATE INDEX idx_admin_actions_admin_id ON admin_actions(admin_id);
-CREATE INDEX idx_admin_actions_target ON admin_actions(target_user_id);
-CREATE INDEX idx_admin_actions_type ON admin_actions(action_type);
-CREATE INDEX idx_admin_actions_time ON admin_actions(created_at);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_admin_id ON admin_actions(admin_id);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_target ON admin_actions(target_user_id);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_type ON admin_actions(action_type);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_time ON admin_actions(created_at);

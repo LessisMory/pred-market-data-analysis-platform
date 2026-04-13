@@ -28,12 +28,12 @@
 | Event category | Specific event | Implemented in |
 |---|---|---|
 | Input validation failure | Malformed JWT / missing auth header | `authenticate.js` middleware |
-| Authentication success | User login via `/v1/auth/verify-mfa` | `authController.js` |
-| Authentication failure | Wrong password, wrong MFA code | `authController.js` |
+| Authentication success | User login via `/v1/auth/login` or Firebase session exchange via `/v1/auth/session` | `authController.js` |
+| Authentication failure | Wrong password or invalid Firebase session token | `authController.js` |
 | Authorisation failure | Non-admin user attempts admin endpoint | `requireSubscription.js` + role check |
 | Session management | Token issued, token revoked on sign-out | `authController.js` |
 | Subscription / billing events | Plan upgrade, payment processed, payment failed | `billingController.js` (planned) |
-| Data export | CSV/PDF report generated and downloaded | `analyticsController.js` |
+| Data export | Not implementing | Report download/export is disabled in the current build, so there is no export event to record |
 | Admin actions | Account disabled, password reset triggered | `analyticsController.js` admin routes |
 | Application errors | Unhandled exceptions, 5xx responses | Global error handler in `app.js` |
 
@@ -42,7 +42,8 @@
 | Event category | Decision |
 |---|---|
 | Successful read of sensitive data (wallet overview, transaction history) | Logged at DEBUG level — useful for anomaly detection |
-| Order execution | Logged — financial action with non-repudiation value |
+| Demo order interactions in terminal | Logged client-side in the terminal prototype for future auditability, but no backend execution route exists |
+| Chart/market view interactions | Not logged — high-volume UI exploration would add noise |
 | Market/contract switch on terminal | Not logged — no security or business value; would add noise |
 
 ### Explicitly not logged
@@ -52,7 +53,7 @@
 | Static asset requests (HTML, CSS, JS files) | Infrastructure-level concern; no security value at application level |
 | Chart data polling / WebSocket tick updates | High-frequency, no auth risk, would fill logs with noise |
 | UI toggle state (Area on/off, chart tab switch) | Pure UI state, no security or business relevance |
-| Passwords, raw MFA codes, card numbers | OWASP explicitly prohibits logging credentials and payment data |
+| Passwords, raw verification codes, card numbers | OWASP explicitly prohibits logging credentials and payment data |
 
 ---
 
@@ -72,9 +73,9 @@ All log entries are written as **JSON objects**, one per line (NDJSON), consiste
   "userRole":    "user",
   "sessionId":   "sess_abc123",
   "sourceIp":    "192.168.1.1",
-  "endpoint":    "POST /v1/auth/verify-mfa",
+  "endpoint":    "POST /v1/auth/login",
   "outcome":     "success",
-  "description": "User U-001 authenticated successfully via MFA",
+  "description": "User U-001 authenticated successfully",
   "requestId":   "req_xyz789"
 }
 ```
@@ -98,7 +99,7 @@ All log entries are written as **JSON objects**, one per line (NDJSON), consiste
 
 ### Data excluded per OWASP guidance
 
-- Passwords, raw MFA codes
+- Passwords, raw verification codes
 - Full credit card numbers or bank account numbers
 - Session tokens or JWT values in cleartext
 - Application source code
@@ -132,12 +133,9 @@ Events sent from the frontend:
 | Event | Trigger |
 |---|---|
 | `authn_login_attempt` | User clicks Sign In |
-| `authn_mfa_attempt` | User submits MFA code |
 | `authn_logout` | User clicks Sign Out |
 | `authz_admin_access` | Admin panel loaded (role = admin) |
 | `authz_redirect` | Non-admin redirected away from admin page |
-| `order_execute_attempt` | User clicks Place Order |
-| `report_generate_request` | User clicks Download Report |
 | `subscription_upgrade_attempt` | User clicks Subscribe |
 | `client_error` | Unhandled JS error caught by `window.onerror` |
 
@@ -154,5 +152,5 @@ The following alert thresholds are defined for implementation in the next sprint
 | 5+ failed logins for same userId in 10 min | WARN | Lock account, notify admin |
 | Admin endpoint accessed from new IP | WARN | Email notification to admin |
 | VPIN > 0.70 sustained for > 5 min | INFO | Platform health dashboard flag |
-| 3+ failed order executions in 1 min | WARN | Flag for manual review |
+| 3+ failed privileged admin actions in 1 min | WARN | Flag for manual review |
 | `client_error` rate > 10/min | ERROR | PagerDuty alert |

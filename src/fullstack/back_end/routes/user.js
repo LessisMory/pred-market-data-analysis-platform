@@ -15,6 +15,7 @@ const authenticate = require('../middleware/authenticate');
  *       404: { description: User not found }
  */
 router.get('/profile', authenticate, userController.getProfile);
+router.get('/me', authenticate, userController.getMeSummary);
 
 /**
  * @openapi
@@ -57,5 +58,11 @@ router.get('/activities', authenticate, userController.getActivities);
  *       400: { description: No fields provided }
  */
 router.put('/update', authenticate, userController.updateProfile);
+router.put('/email', authenticate, userController.updateEmail);
+router.put('/password', authenticate, userController.updatePassword);
+router.put('/preferences', authenticate, userController.updatePreferences);
+router.post('/api-keys', authenticate, userController.createApiKey);
+router.delete('/api-keys/:id', authenticate, userController.revokeApiKey);
+router.delete('/deactivate', authenticate, userController.deactivateAccount);
 
 module.exports = router;

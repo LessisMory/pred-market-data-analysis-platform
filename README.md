@@ -2,6 +2,10 @@
 
 High-frequency data platform for prediction-market analytics (Order Book Analyzer), focused on collecting, normalizing, and serving historical and live market data for quant research and trading workflows.
 
+Deployment guides:
+- Docker: `DOCKER.md`
+- VM + autostart: `VM_DEPLOY.md`
+
 ## Lean Canvas Alignment
 
 Lean canvas artifact: `docs/lean_canvas.png`

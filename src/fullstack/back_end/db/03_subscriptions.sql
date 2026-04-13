@@ -12,8 +12,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
         ON DELETE CASCADE
 );
 
-CREATE INDEX idx_sub_user_id ON subscriptions(user_id);
-CREATE INDEX idx_sub_status ON subscriptions(status);
+CREATE INDEX IF NOT EXISTS idx_sub_user_id ON subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sub_status ON subscriptions(status);
 
 -- Payments table
 CREATE TABLE IF NOT EXISTS payments (
@@ -30,6 +30,6 @@ CREATE TABLE IF NOT EXISTS payments (
         ON DELETE CASCADE
 );
 
-CREATE INDEX idx_payments_user_id ON payments(user_id);
-CREATE INDEX idx_payments_status ON payments(status);
-CREATE INDEX idx_payments_time ON payments(created_at);
+CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_payments_time ON payments(created_at);

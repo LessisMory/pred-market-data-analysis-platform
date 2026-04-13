@@ -157,8 +157,6 @@ const PERIOD_OPTIONS = [
 const TerminalScreen = () => {
   const [userName, setUserName]       = useState("Trader");
   const [activeMarket, setActiveMarket] = useState("BTC-15M-UP");
-  const [orderSize, setOrderSize]     = useState("");
-  const [isExecuting, setIsExecuting] = useState(false);
 
   // Price chart: 15-min datetime range
   const [startDate, setStartDate] = useState("");
@@ -243,29 +241,6 @@ const TerminalScreen = () => {
   const mid = mkt.midPrice[N-1];
   const vpinAlert = mkt.vpin >= 0.7;
   const currentDepth = mkt.depthBySlot[depthSlot] || mkt.depthBySlot[0];
-
-  // POST /v1/orders/execute
-  const handlePlaceOrder = async () => {
-    if (!orderSize || isNaN(orderSize) || Number(orderSize) <= 0) return alert("Please enter a valid order size.");
-    setIsExecuting(true);
-    window.Logger && window.Logger.orderAttempt(activeMarket, orderSize);
-    // try {
-    //   const res = await fetch('https://api.yourbackend.com/v1/orders/execute', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('jwt_token')}` },
-    //     body: JSON.stringify({ market: activeMarket, size: Number(orderSize), type: 'market' })
-    //   });
-    //   const data = await res.json();
-    //   alert('Order filled at ' + data.fillPrice);
-    //   setOrderSize("");
-    // } catch (err) { console.error(err); }
-    // finally { setIsExecuting(false); }
-    setTimeout(() => {
-      window.Logger && window.Logger.orderSuccess(activeMarket, orderSize);
-      alert("[Demo] Order filled!\nRouted $" + orderSize + " on " + activeMarket);
-      setOrderSize(""); setIsExecuting(false);
-    }, 600);
-  };
 
   const contracts = ['BTC-15M-UP', 'BTC-15M-DN'];
 
@@ -366,30 +341,6 @@ const TerminalScreen = () => {
             {vpinAlert && <div style={{ fontSize: 8, color: C.red, background: C.red + "15", padding: "4px 8px", borderRadius: 4, textAlign: "center" }}>⚠ VPIN ELEVATED</div>}
           </div>
 
-          {/* Execute */}
-          <div style={{ padding: 14, flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 10, fontWeight: 700 }}>EXECUTE</span>
-              <Tag color={activeMarket.includes('UP') ? C.accent : C.red}>{activeMarket.includes('UP') ? 'UP' : 'DN'}</Tag>
-            </div>
-            <div style={{ position: "relative" }}>
-              <input type="number" placeholder="0.00" value={orderSize} onChange={e => setOrderSize(e.target.value)}
-                style={{ width: "100%", background: C.surface, border: "1px solid " + C.border, padding: "9px 36px 9px 10px", color: C.white, borderRadius: 6, outline: "none", fontSize: 12, fontFamily: "'JetBrains Mono'" }} />
-              <span style={{ position: "absolute", right: 8, top: 10, fontSize: 9, color: C.muted }}>USD</span>
-            </div>
-            <div style={{ background: C.surface, padding: 8, borderRadius: 6, display: "flex", flexDirection: "column", gap: 5 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9 }}>
-                <span style={{ color: C.muted }}>Est. Payout</span>
-                <span style={{ color: C.accent }}>${orderSize ? (orderSize * 1.85).toFixed(2) : '0.00'}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9 }}>
-                <span style={{ color: C.muted }}>Platform Fee</span><span>$0.50</span>
-              </div>
-            </div>
-            <Btn fullWidth onClick={handlePlaceOrder} disabled={isExecuting} style={{ opacity: isExecuting ? 0.7 : 1, fontSize: 12 }}>
-              {isExecuting ? "ROUTING..." : "PLACE " + (activeMarket.includes('UP') ? 'BUY UP' : 'BUY DN')}
-            </Btn>
-          </div>
         </aside>
 
         {/* Center — all charts stacked vertically */}

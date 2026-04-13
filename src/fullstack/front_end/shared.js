@@ -6,7 +6,21 @@ window.C = {
 };
 
 window.Logo = ({ size = 16 }) => (
-  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+  <button
+    type="button"
+    onClick={() => window.location.href = 'menu.html'}
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+      background: "transparent",
+      border: "none",
+      padding: 0,
+      cursor: "pointer"
+    }}
+    aria-label="Go to menu"
+    title="Back to menu"
+  >
     <svg width={size * 1.6} height={size * 1.6} viewBox="0 0 26 26">
       <rect x="1"  y="10" width="4" height="14" fill={window.C.accent} rx="1" />
       <rect x="7"  y="6"  width="4" height="18" fill={window.C.accent} opacity=".7" rx="1" />
@@ -16,7 +30,7 @@ window.Logo = ({ size = 16 }) => (
     <span style={{ fontFamily: "'JetBrains Mono'", fontWeight: 600, fontSize: size, color: window.C.white, letterSpacing: 1 }}>
       OB<span style={{ color: window.C.accent }}>Analyzer</span>
     </span>
-  </div>
+  </button>
 );
 
 window.Tag = ({ children, color }) => {

@@ -13,7 +13,5 @@ CREATE TABLE IF NOT EXISTS system_events (
         ON DELETE SET NULL
 );
 
-CREATE INDEX idx_system_events_type ON system_events(event_type);
-CREATE INDEX idx_system_events_user_id ON system_events(user_id);
-CREATE INDEX idx_system_events_status ON system_events(status);
-CREATE INDEX idx_system_events_time ON system_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_system_events_user_id ON system_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_system_events_time ON system_events(created_at);

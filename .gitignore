@@ -1,9 +1,46 @@
+# Python
 __pycache__/
+*.pyc
+*.pyo
 .pytest_cache/
 .coverage
 .coverage.*
 htmlcov/
+*.egg-info/
+venv/
+.venv/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Build / coverage
+dist/
+build/
+coverage/
+.nyc_output/
+
+# Environment & secrets
 .env
 .env.*
 !.env.example
+!.env.docker.example
+firebase-service-account*.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+*.log
+
+# Misc
+=
