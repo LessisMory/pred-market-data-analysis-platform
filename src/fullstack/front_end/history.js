@@ -1,52 +1,82 @@
 const { C, Logo, Btn, Tag } = window;
 const { useState, useEffect, useMemo } = React;
 
+const formatPaymentStatus = (status) => {
+  const normalized = String(status || "").toLowerCase();
+
+  if (normalized === "completed") return "Paid";
+  if (normalized === "refunded") return "Refunded";
+  if (normalized === "failed") return "Failed";
+  return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : "Pending";
+};
+
+const formatPlanName = (plan) => {
+  const key = String(plan || "").toLowerCase();
+  if (key === "premium" || key === "pro") return "Pro";
+  if (key === "institutional" || key === "elite") return "Elite";
+  if (key === "free") return "Free";
+  return plan || "Free";
+};
+
 const HistoryScreen = () => {
   const [userName, setUserName]         = useState("Trader");
   const [filter, setFilter]             = useState("All");
   const [isLoading, setIsLoading]       = useState(true);
   const [transactions, setTransactions] = useState([]);
+  const [currentPlan, setCurrentPlan]   = useState("Free");
+  const [memberSince, setMemberSince]   = useState("—");
 
   useEffect(() => {
     const savedName = localStorage.getItem('ob_user_name');
     if (savedName) setUserName(savedName);
   }, []);
 
-  // GET /api/analytics/trades — fetch trade records for the authenticated user
-  //
-  // FIELD MAPPING — confirm these field names with backend:
-  //   FIELD_ID          : unique trade identifier       → maps to txn.id
-  //   FIELD_TIMESTAMP   : trade datetime string/epoch   → maps to txn.date
-  //   FIELD_TYPE        : trade description / type      → maps to txn.desc
-  //   FIELD_AMOUNT      : numeric amount                → maps to txn.amount
-  //   FIELD_METHOD      : payment method string         → maps to txn.method
-  //   FIELD_STATUS      : status string (e.g. "Paid")   → maps to txn.status
-  //
-  // Once confirmed, replace the FIELD_* placeholders below and remove this block.
+  useEffect(() => {
+    const fetchUserSummary = async () => {
+      try {
+        await window.FirebaseAuthClient?.ensureSession?.();
+        const res = await fetch(`/v1/user/me`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('jwt_token')}` }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        const resolvedName = data.name || [data.firstName, data.lastName].filter(Boolean).join(' ').trim();
+        if (resolvedName) setUserName(resolvedName);
+        setCurrentPlan(formatPlanName(data.planName || data.plan));
+        setMemberSince(data.memberSince || '—');
+      } catch (err) {
+        console.error('Failed to fetch user summary:', err);
+      }
+    };
+
+    fetchUserSummary();
+  }, []);
+
+  // GET /v1/transactions — fetch billing/payment records for the authenticated user
   useEffect(() => {
     const fetchBackendTransactions = async () => {
       try {
-        const res = await fetch('https://api.yourbackend.com/api/analytics/trades', {
+        await window.FirebaseAuthClient?.ensureSession?.();
+        const res = await fetch(`/v1/transactions`, {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('jwt_token')}` }
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const raw = await res.json();
 
-        // Normalise raw records into the shape this component expects.
-        // Replace every FIELD_* with the actual key name from the API response.
         const normalised = raw.map(item => ({
-          id:     item.FIELD_ID,
-          date:   new Date(item.FIELD_TIMESTAMP).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-          desc:   item.FIELD_TYPE,
-          amount: `$${parseFloat(item.FIELD_AMOUNT).toFixed(2)}`,
-          method: item.FIELD_METHOD ?? '—',
-          status: item.FIELD_STATUS,
+          id:     `PAY-${item.payment_id}`,
+          date:   new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+          desc:   item.amount > 0 ? 'Subscription payment' : 'Plan change',
+          amount: `$${parseFloat(item.amount || 0).toFixed(2)}`,
+          method: item.payment_type ?? '—',
+          status: formatPaymentStatus(item.status),
         }));
 
         setTransactions(normalised);
         setIsLoading(false);
       } catch (err) {
-        console.error('Failed to fetch trades:', err);
+        console.error('Failed to fetch transactions:', err);
         setIsLoading(false);
       }
     };
@@ -54,16 +84,16 @@ const HistoryScreen = () => {
     fetchBackendTransactions();
   }, []);
 
-  // WS /stream — optional: listen for newly settled trade events pushed by backend
+  // WS /stream — optional: listen for newly settled billing events pushed by backend
   // ws.onmessage = (event) => {
   //   const item = JSON.parse(event.data);
   //   const newTxn = {
-  //     id:     item.FIELD_ID,
-  //     date:   new Date(item.FIELD_TIMESTAMP).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-  //     desc:   item.FIELD_TYPE,
-  //     amount: `$${parseFloat(item.FIELD_AMOUNT).toFixed(2)}`,
-  //     method: item.FIELD_METHOD ?? '—',
-  //     status: item.FIELD_STATUS,
+  //     id:     `PAY-${item.payment_id}`,
+  //     date:   new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+  //     desc:   item.amount > 0 ? 'Subscription payment' : 'Plan change',
+  //     amount: `$${parseFloat(item.amount || 0).toFixed(2)}`,
+  //     method: item.payment_type ?? '—',
+  //     status: formatPaymentStatus(item.status),
   //   };
   //   setTransactions(prev => [newTxn, ...prev]);
   // };
@@ -104,8 +134,8 @@ const HistoryScreen = () => {
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>CURRENT PLAN</div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <Tag color={C.accent}>Pro</Tag>
-              <span style={{ fontSize: 13, color: C.white }}>Active since 2025</span>
+              <Tag color={C.accent}>{currentPlan}</Tag>
+              <span style={{ fontSize: 13, color: C.white }}>Member since {memberSince}</span>
               <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12, border: `1px solid ${C.border}` }}>Manage Plan</Btn>
             </div>
           </div>
@@ -183,7 +213,7 @@ const HistoryScreen = () => {
                   <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 14, color: C.white }}>{txn.amount}</div>
                   <div style={{ fontSize: 13, color: C.muted, display: "flex", alignItems: "center", gap: 6 }}>💳 {txn.method}</div>
                   <div style={{ textAlign: "right" }}>
-                    <Tag color={txn.status === "Paid" ? C.accent : C.amber}>{txn.status}</Tag>
+                    <Tag color={txn.status === "Paid" ? C.accent : txn.status === "Refunded" ? C.amber : C.red}>{txn.status}</Tag>
                   </div>
                 </div>
               ))}

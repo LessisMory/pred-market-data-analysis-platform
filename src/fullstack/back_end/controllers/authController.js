@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const config = require('../config/env');
+const { syncFirebaseUser } = require('../services/firebaseAuthSync');
 
 // ─── Helpers ────────────────────────────────────────────────
 
@@ -24,16 +25,114 @@ function generateJwt(payload) {
   });
 }
 
-function generateMfaCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+function splitName(name = '') {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' '),
+  };
+}
+
+function serializeUser(user) {
+  if (!user) {
+    return user;
+  }
+
+  const { firstName, lastName } = splitName(user.name);
+  return {
+    ...user,
+    firstName,
+    lastName,
+    planName: user.plan || null,
+  };
+}
+
+function buildAdminUser(username) {
+  return {
+    user_id: 0,
+    email: `${username}@admin.local`,
+    name: 'Platform Administrator',
+    username,
+    role: 'admin',
+    status: 'active',
+    plan: 'enterprise',
+    firstName: 'Platform',
+    lastName: 'Administrator',
+    planName: 'enterprise',
+  };
+}
+
+function isConfiguredAdminLogin(username, password) {
+  return username === config.admin.username && password === config.admin.password;
+}
+
+function getFirebaseClientConfig() {
+  return {
+    apiKey: config.firebase.apiKey,
+    authDomain: config.firebase.authDomain,
+    projectId: config.firebase.projectId,
+    storageBucket: config.firebase.storageBucket,
+    messagingSenderId: config.firebase.messagingSenderId,
+    appId: config.firebase.appId,
+    measurementId: config.firebase.measurementId,
+  };
+}
+
+function firebaseClientConfigured() {
+  return Boolean(
+    config.firebase.apiKey &&
+      config.firebase.authDomain &&
+      config.firebase.projectId &&
+      config.firebase.appId
+  );
 }
 
 // ─── Frontend required endpoints ────────────────────────────
 
+exports.getClientConfig = (_req, res) => {
+  return res.json({
+    enabled: firebaseClientConfigured(),
+    firebase: getFirebaseClientConfig(),
+    providers: {
+      google: true,
+    },
+  });
+};
+
+exports.exchangeFirebaseSession = async (req, res, next) => {
+  const idToken = req.body.idToken || req.headers.authorization?.replace(/^Bearer\s+/i, '');
+
+  if (!idToken) {
+    return res.status(400).json({ error: 'idToken is required' });
+  }
+
+  try {
+    const user = await syncFirebaseUser({
+      idToken,
+      overrides: {
+        email: req.body.email,
+        phone: req.body.phone,
+        name: req.body.name,
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+      },
+    });
+
+    return res.json({
+      token: idToken,
+      user,
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 // POST /v1/auth/register
 exports.register = async (req, res, next) => {
-  const { email, password, name } = req.body;
-  if (!email || !password || !name) {
+  const { email, password, name, firstName, lastName } = req.body;
+  const resolvedName = name || [firstName, lastName].filter(Boolean).join(' ').trim();
+
+  if (!email || !password || !resolvedName) {
     return res.status(400).json({ error: 'email, password, and name are required' });
   }
 
@@ -48,25 +147,61 @@ exports.register = async (req, res, next) => {
       `INSERT INTO users (email, password_hash, name)
        VALUES ($1, $2, $3)
        RETURNING user_id, email, name, role, status, plan, created_at`,
-      [email, passwordHash, name]
+      [email, passwordHash, resolvedName]
     );
 
-    return res.status(201).json({ user: result.rows[0] });
+    const user = serializeUser(result.rows[0]);
+    const token = generateJwt({ user_id: user.user_id, email: user.email, role: user.role });
+
+    await db.query('UPDATE users SET last_login = NOW() WHERE user_id = $1', [user.user_id]);
+
+    return res.status(201).json({
+      token,
+      user,
+      mfa_required: false,
+      admin_access: user.role === 'admin',
+    });
   } catch (err) {
     return next(err);
   }
 };
 
-// POST /v1/auth/login  → verify email/password, return user_id for 2FA step
+// POST /v1/auth/login  → verify credentials and return JWT + user info
 exports.login = async (req, res, next) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: 'email and password are required' });
+  const { email, username, password } = req.body;
+  if ((!email && !username) || !password) {
+    return res.status(400).json({ error: 'email or username and password are required' });
+  }
+
+  if (username && isConfiguredAdminLogin(username, password)) {
+    const user = buildAdminUser(username);
+    const token = generateJwt({
+      user_id: user.user_id,
+      email: user.email,
+      role: user.role,
+      username,
+      is_admin_session: true,
+    });
+
+    return res.json({
+      token,
+      user,
+      mfa_required: false,
+      admin_access: true,
+    });
+  }
+
+  if (username && !email) {
+    return res.status(401).json({ error: 'Invalid admin username or password' });
+  }
+
+  if (!email) {
+    return res.status(400).json({ error: 'email is required for non-admin login' });
   }
 
   try {
     const result = await db.query(
-      'SELECT user_id, password_hash, status FROM users WHERE email = $1',
+      'SELECT user_id, email, name, password_hash, role, status FROM users WHERE email = $1',
       [email]
     );
     if (result.rows.length === 0) {
@@ -81,273 +216,20 @@ exports.login = async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
 
-    // Password verified – frontend should call /send-sms next
-    return res.json({ user_id: user.user_id, mfa_required: true });
-  } catch (err) {
-    return next(err);
-  }
-};
-
-// POST /v1/auth/send-sms  → generate 6-digit code and send via SMS
-exports.sendSms = async (req, res, next) => {
-  const { user_id, phone } = req.body;
-  if (!user_id) {
-    return res.status(400).json({ error: 'user_id is required' });
-  }
-
-  try {
-    const code = generateMfaCode();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
-    await db.query(
-      `INSERT INTO mfa_code (user_id, code, expires_at) VALUES ($1, $2, $3)`,
-      [user_id, code, expiresAt]
-    );
-
-    // TODO: integrate AWS SNS / Twilio here
-    // await snsClient.publish({ PhoneNumber: phone, Message: `Your code: ${code}` });
-    console.log(`[MFA] Code for user ${user_id}: ${code}`); // dev only
-
-    return res.json({ message: 'Verification code sent', expires_in: 300 });
-  } catch (err) {
-    return next(err);
-  }
-};
-
-// POST /v1/auth/verify-mfa  → validate SMS code, return JWT + user info
-exports.verifyMfa = async (req, res, next) => {
-  const { user_id, code } = req.body;
-  if (!user_id || !code) {
-    return res.status(400).json({ error: 'user_id and code are required' });
-  }
-
-  try {
-    const result = await db.query(
-      `SELECT id, expires_at FROM mfa_code
-       WHERE user_id = $1 AND code = $2 AND used = FALSE
-       ORDER BY created_at DESC LIMIT 1`,
-      [user_id, code]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid verification code' });
-    }
-
-    const mfa = result.rows[0];
-    if (new Date(mfa.expires_at) < new Date()) {
-      return res.status(401).json({ error: 'Verification code expired' });
-    }
-
-    // Mark code as used and update last_login
-    await db.query('UPDATE mfa_code SET used = TRUE WHERE id = $1', [mfa.id]);
-    await db.query('UPDATE users SET last_login = NOW() WHERE user_id = $1', [user_id]);
-
-    // Fetch user info
-    const userResult = await db.query(
-      'SELECT user_id, email, name, role, status, plan FROM users WHERE user_id = $1',
-      [user_id]
-    );
-    const user = userResult.rows[0];
-
-    // Generate JWT
-    const token = generateJwt({ user_id: user.user_id, email: user.email, role: user.role });
-
-    return res.json({ token, user });
-  } catch (err) {
-    return next(err);
-  }
-};
-
-// ─── Phone Login ────────────────────────────────────────────
-
-// POST /v1/auth/phone/send-code  → send SMS code to phone number (auto-creates user if needed)
-exports.phoneSendCode = async (req, res, next) => {
-  const { phone } = req.body;
-  if (!phone) {
-    return res.status(400).json({ error: 'phone is required' });
-  }
-
-  try {
-    // Upsert user by phone number
-    const upsertResult = await db.query(
-      `INSERT INTO users (phone, email, password_hash, name)
-       VALUES ($1, $1, 'phone', $1)
-       ON CONFLICT (phone) DO UPDATE SET last_login = NOW()
-       RETURNING user_id`,
-      [phone]
-    );
-    const userId = upsertResult.rows[0].user_id;
-
-    const code = generateMfaCode();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-    await db.query(
-      'INSERT INTO mfa_code (user_id, code, expires_at) VALUES ($1, $2, $3)',
-      [userId, code, expiresAt]
-    );
-
-    // TODO: integrate AWS SNS / Twilio here
-    console.log(`[PHONE] Code for ${phone}: ${code}`); // dev only
-
-    return res.json({ user_id: userId, message: 'Verification code sent', expires_in: 300 });
-  } catch (err) {
-    return next(err);
-  }
-};
-
-// POST /v1/auth/phone/verify  → verify SMS code, return JWT + user info
-exports.phoneVerify = async (req, res, next) => {
-  const { user_id, code } = req.body;
-  if (!user_id || !code) {
-    return res.status(400).json({ error: 'user_id and code are required' });
-  }
-
-  try {
-    const result = await db.query(
-      `SELECT id, expires_at FROM mfa_code
-       WHERE user_id = $1 AND code = $2 AND used = FALSE
-       ORDER BY created_at DESC LIMIT 1`,
-      [user_id, code]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid verification code' });
-    }
-
-    const mfa = result.rows[0];
-    if (new Date(mfa.expires_at) < new Date()) {
-      return res.status(401).json({ error: 'Verification code expired' });
-    }
-
-    await db.query('UPDATE mfa_code SET used = TRUE WHERE id = $1', [mfa.id]);
-    await db.query('UPDATE users SET last_login = NOW() WHERE user_id = $1', [user_id]);
-
-    const userResult = await db.query(
-      'SELECT user_id, email, name, role, status, plan, phone FROM users WHERE user_id = $1',
-      [user_id]
-    );
-    const user = userResult.rows[0];
-
-    const token = generateJwt({ user_id: user.user_id, email: user.email, role: user.role });
-
-    return res.json({ token, user });
-  } catch (err) {
-    return next(err);
-  }
-};
-
-// ─── OAuth ──────────────────────────────────────────────────
-
-const PROVIDERS = {
-  google: {
-    authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
-    tokenUrl: 'https://oauth2.googleapis.com/token',
-    userInfoUrl: 'https://www.googleapis.com/oauth2/v2/userinfo',
-    clientId: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    scopes: 'openid email profile',
-  },
-  github: {
-    authorizeUrl: 'https://github.com/login/oauth/authorize',
-    tokenUrl: 'https://github.com/login/oauth/access_token',
-    userInfoUrl: 'https://api.github.com/user',
-    clientId: process.env.GITHUB_CLIENT_ID,
-    clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    scopes: 'read:user user:email',
-  },
-};
-
-const REDIRECT_BASE = process.env.OAUTH_REDIRECT_BASE || 'http://localhost:3000';
-
-// GET /v1/auth/oauth/:provider
-exports.getOAuthUrl = (req, res) => {
-  const { provider } = req.params;
-  const config = PROVIDERS[provider];
-  if (!config) {
-    return res.status(400).json({ error: `Unsupported provider: ${provider}` });
-  }
-
-  const redirectUri = `${REDIRECT_BASE}/v1/auth/oauth/${provider}/callback`;
-  const params = new URLSearchParams({
-    client_id: config.clientId,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: config.scopes,
-  });
-
-  return res.json({ url: `${config.authorizeUrl}?${params.toString()}` });
-};
-
-// GET /v1/auth/oauth/:provider/callback
-exports.oauthCallback = async (req, res, next) => {
-  const { provider } = req.params;
-  const { code } = req.query;
-  const config = PROVIDERS[provider];
-
-  if (!config) {
-    return res.status(400).json({ error: `Unsupported provider: ${provider}` });
-  }
-  if (!code) {
-    return res.status(400).json({ error: 'Missing authorization code' });
-  }
-
-  try {
-    const redirectUri = `${REDIRECT_BASE}/v1/auth/oauth/${provider}/callback`;
-
-    const tokenRes = await fetch(config.tokenUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept: 'application/json',
-      },
-      body: new URLSearchParams({
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        code,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-      }),
+    await db.query('UPDATE users SET last_login = NOW() WHERE user_id = $1', [user.user_id]);
+    const serializedUser = serializeUser(user);
+    const token = generateJwt({
+      user_id: serializedUser.user_id,
+      email: serializedUser.email,
+      role: serializedUser.role,
     });
-    const tokenData = await tokenRes.json();
 
-    if (!tokenData.access_token) {
-      return res.status(401).json({ error: 'Failed to obtain access token' });
-    }
-
-    const userInfoRes = await fetch(config.userInfoUrl, {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    return res.json({
+      token,
+      user: serializedUser,
+      mfa_required: false,
+      admin_access: serializedUser.role === 'admin',
     });
-    const userInfo = await userInfoRes.json();
-
-    const email = userInfo.email;
-    const username = userInfo.name || userInfo.login || email.split('@')[0];
-
-    // Upsert user
-    const upsertUser = await db.query(
-      `INSERT INTO users (email, password_hash, name)
-       VALUES ($1, 'oauth', $2)
-       ON CONFLICT (email) DO UPDATE SET last_login = NOW()
-       RETURNING user_id, email, name, role, status, plan`,
-      [email, username]
-    );
-    const user = upsertUser.rows[0];
-
-    // Create session
-    const expiresAt = tokenData.expires_in
-      ? new Date(Date.now() + tokenData.expires_in * 1000)
-      : null;
-
-    await db.query(
-      `INSERT INTO user_session (user_id, oauth_provider, access_token, refresh_token, expires_at)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [user.user_id, provider, tokenData.access_token, tokenData.refresh_token || null, expiresAt]
-    );
-
-    // Generate JWT same as normal login
-    const token = generateJwt({ user_id: user.user_id, email: user.email, role: user.role });
-
-    const frontendRedirect = process.env.FRONTEND_URL || 'http://localhost:5173';
-    return res.redirect(`${frontendRedirect}/auth/callback?token=${token}`);
   } catch (err) {
     return next(err);
   }
@@ -362,6 +244,14 @@ exports.getMe = async (req, res, next) => {
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
+  if (req.user.firebase_uid) {
+    return res.json(serializeUser(req.user));
+  }
+
+  if (req.user.role === 'admin' && req.user.is_admin_session) {
+    return res.json(buildAdminUser(req.user.username || config.admin.username));
+  }
+
   try {
     const result = await db.query(
       'SELECT user_id, email, name, role, status, plan FROM users WHERE user_id = $1',
@@ -372,7 +262,7 @@ exports.getMe = async (req, res, next) => {
       return res.status(401).json({ error: 'User not found' });
     }
 
-    return res.json(result.rows[0]);
+    return res.json(serializeUser(result.rows[0]));
   } catch (err) {
     return next(err);
   }
@@ -382,6 +272,14 @@ exports.getMe = async (req, res, next) => {
 exports.logout = async (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  if (req.user.firebase_uid) {
+    return res.json({ message: 'Logged out' });
+  }
+
+  if (req.user.role === 'admin' && req.user.is_admin_session) {
+    return res.json({ message: 'Logged out' });
   }
 
   try {

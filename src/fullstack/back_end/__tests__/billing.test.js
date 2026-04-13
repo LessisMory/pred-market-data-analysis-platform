@@ -51,6 +51,20 @@ describe('POST /v1/billing/subscribe', () => {
     expect(res.body.amount).toBe(0);
   });
 
+  test('200 — accepts frontend planId and cycle fields', async () => {
+    db.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const res = await request(app).post(URL).set(AUTH).send({ planId: 'pro', cycle: 'monthly' });
+    expect(res.status).toBe(200);
+    expect(res.body.plan).toBe('premium');
+    expect(res.body.planId).toBe('pro');
+    expect(res.body.amount).toBe(9.99);
+  });
+
   test('400 — missing plan', async () => {
     const res = await request(app).post(URL).set(AUTH).send({});
     expect(res.status).toBe(400);
@@ -102,72 +116,6 @@ describe('GET /v1/transactions', () => {
 
   test('401 — no auth', async () => {
     const res = await request(app).get(URL);
-    expect(res.status).toBe(401);
-  });
-});
-
-// ─────────────────────────────────────────────
-// GET /v1/reports/metrics
-// ─────────────────────────────────────────────
-describe('GET /v1/reports/metrics', () => {
-  const URL = '/v1/reports/metrics';
-
-  test('200 — returns metrics', async () => {
-    db.query.mockResolvedValueOnce({ rows: [{ metric_date: '2026-01-01', total_users: 100 }] });
-
-    const res = await request(app).get(URL).set(AUTH);
-    expect(res.status).toBe(200);
-    expect(Array.isArray(res.body)).toBe(true);
-  });
-
-  test('200 — accepts date range filter', async () => {
-    db.query.mockResolvedValueOnce({ rows: [] });
-
-    const res = await request(app).get(`${URL}?start=2026-01-01&end=2026-01-31`).set(AUTH);
-    expect(res.status).toBe(200);
-  });
-
-  test('401 — no auth', async () => {
-    const res = await request(app).get(URL);
-    expect(res.status).toBe(401);
-  });
-});
-
-// ─────────────────────────────────────────────
-// POST /v1/reports/generate
-// ─────────────────────────────────────────────
-describe('POST /v1/reports/generate', () => {
-  const URL = '/v1/reports/generate';
-
-  test('200 — generates report', async () => {
-    db.query
-      .mockResolvedValueOnce({ rows: [{ trade_count: '5', total_volume: '1000' }] })
-      .mockResolvedValueOnce({ rows: [{ payment_count: '2', total_paid: '59.98' }] })
-      .mockResolvedValueOnce({ rows: [] }); // event log
-
-    const res = await request(app).post(URL).set(AUTH).send({ start_date: '2026-01-01', end_date: '2026-01-31' });
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('report');
-    expect(res.body.report.period.start_date).toBe('2026-01-01');
-  });
-
-  test('400 — missing start_date', async () => {
-    const res = await request(app).post(URL).set(AUTH).send({ end_date: '2026-01-31' });
-    expect(res.status).toBe(400);
-  });
-
-  test('400 — missing end_date', async () => {
-    const res = await request(app).post(URL).set(AUTH).send({ start_date: '2026-01-01' });
-    expect(res.status).toBe(400);
-  });
-
-  test('400 — empty body', async () => {
-    const res = await request(app).post(URL).set(AUTH).send({});
-    expect(res.status).toBe(400);
-  });
-
-  test('401 — no auth', async () => {
-    const res = await request(app).post(URL).send({ start_date: '2026-01-01', end_date: '2026-01-31' });
     expect(res.status).toBe(401);
   });
 });

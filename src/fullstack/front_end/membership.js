@@ -47,6 +47,7 @@ const MembershipScreen = () => {
   const [userName, setUserName]         = useState("Trader");
   const [billingCycle, setBillingCycle] = useState('monthly');
   const [selectedPlan, setSelectedPlan] = useState('pro');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const savedName = localStorage.getItem('ob_user_name');
@@ -55,20 +56,32 @@ const MembershipScreen = () => {
 
   // POST /v1/billing/subscribe — submit plan selection and billing cycle, redirect on success
   const handleSubscribe = async () => {
-    // try {
-    //   const res = await fetch('https://api.yourbackend.com/v1/billing/subscribe', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('jwt_token')}` },
-    //     body: JSON.stringify({ planId: selectedPlan, cycle: billingCycle })
-    //   });
-    //   if (res.ok) {
-    //     alert(`Successfully subscribed to ${plans.find(p => p.id === selectedPlan).name} Plan!`);
-    //     window.location.href = 'menu.html';
-    //   } else { alert("Payment failed or invalid request."); }
-    // } catch (err) { console.error(err); }
+    setIsSubmitting(true);
 
-    alert(`[Demo] Successfully subscribed to ${plans.find(p => p.id === selectedPlan).name} Plan!`);
-    window.location.href = 'menu.html';
+    try {
+      await window.FirebaseAuthClient?.ensureSession?.();
+      const res = await fetch(`/v1/billing/subscribe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
+        },
+        body: JSON.stringify({ planId: selectedPlan, cycle: billingCycle })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Payment failed or invalid request.');
+      }
+
+      alert(`Successfully subscribed to ${plans.find(p => p.id === selectedPlan).name} Plan!`);
+      window.location.href = 'menu.html';
+    } catch (err) {
+      console.error('Failed to subscribe:', err);
+      alert(err.message || 'Unable to update subscription.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getPrice = (plan) =>
@@ -168,7 +181,9 @@ const MembershipScreen = () => {
                 <div style={{ width: 1, height: 16, background: C.border, margin: "0 8px" }} />
                 <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 12, color: C.muted }}>CVC ***</div>
               </div>
-              <Btn style={{ padding: "16px 32px", fontSize: 16 }} onClick={handleSubscribe}>Subscribe →</Btn>
+              <Btn style={{ padding: "16px 32px", fontSize: 16 }} onClick={handleSubscribe} disabled={isSubmitting}>
+                {isSubmitting ? 'Processing...' : 'Subscribe →'}
+              </Btn>
             </div>
           ) : (
             <Btn style={{ padding: "16px 32px", fontSize: 16 }} onClick={() => window.location.href = 'menu.html'}>

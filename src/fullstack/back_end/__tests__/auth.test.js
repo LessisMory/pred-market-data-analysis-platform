@@ -20,6 +20,7 @@ function makeToken(payload) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  db.query.mockResolvedValue({ rows: [] });
 });
 
 // ─────────────────────────────────────────────
@@ -33,12 +34,15 @@ describe('POST /v1/auth/register', () => {
       .mockResolvedValueOnce({ rows: [] }) // no existing user
       .mockResolvedValueOnce({
         rows: [{ user_id: 1, email: 'a@b.com', name: 'Test', role: 'user', status: 'active', plan: 'free', created_at: new Date().toISOString() }],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
 
     const res = await request(app).post(URL).send({ email: 'a@b.com', password: 'pass123', name: 'Test' });
     expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty('token');
     expect(res.body.user).toHaveProperty('user_id');
     expect(res.body.user.email).toBe('a@b.com');
+    expect(res.body.mfa_required).toBe(false);
   });
 
   test('400 — missing email', async () => {
@@ -84,7 +88,8 @@ describe('POST /v1/auth/register', () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
         rows: [{ user_id: 2, email: 'b@c.com', name: 'X', role: 'user', status: 'active', plan: 'free', created_at: new Date().toISOString() }],
-      });
+      })
+      .mockResolvedValueOnce({ rows: [] });
 
     const res = await request(app).post(URL).send({ email: 'b@c.com', password: 'pass123', name: 'X', admin: true, role: 'admin' });
     expect(res.status).toBe(201);
@@ -102,14 +107,18 @@ describe('POST /v1/auth/login', () => {
   const hash = crypto.scryptSync('correct-password', salt, 64).toString('hex');
   const storedHash = `${salt}:${hash}`;
 
-  test('200 — valid credentials trigger MFA', async () => {
-    db.query.mockResolvedValueOnce({
-      rows: [{ user_id: 1, password_hash: storedHash, status: 'active' }],
-    });
+  test('200 — valid credentials return a direct session', async () => {
+    db.query
+      .mockResolvedValueOnce({
+        rows: [{ user_id: 1, email: 'a@b.com', name: 'Test', password_hash: storedHash, role: 'user', status: 'active' }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
 
     const res = await request(app).post(URL).send({ email: 'a@b.com', password: 'correct-password' });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ user_id: 1, mfa_required: true });
+    expect(res.body).toHaveProperty('token');
+    expect(res.body.user.email).toBe('a@b.com');
+    expect(res.body.mfa_required).toBe(false);
   });
 
   test('400 — missing email', async () => {
@@ -132,7 +141,7 @@ describe('POST /v1/auth/login', () => {
 
   test('401 — wrong password', async () => {
     db.query.mockResolvedValueOnce({
-      rows: [{ user_id: 1, password_hash: storedHash, status: 'active' }],
+      rows: [{ user_id: 1, email: 'a@b.com', name: 'Test', password_hash: storedHash, role: 'user', status: 'active' }],
     });
 
     const res = await request(app).post(URL).send({ email: 'a@b.com', password: 'wrong-password' });
@@ -141,89 +150,29 @@ describe('POST /v1/auth/login', () => {
 
   test('403 — disabled account', async () => {
     db.query.mockResolvedValueOnce({
-      rows: [{ user_id: 1, password_hash: storedHash, status: 'disabled' }],
+      rows: [{ user_id: 1, email: 'a@b.com', name: 'Test', password_hash: storedHash, role: 'user', status: 'disabled' }],
     });
 
     const res = await request(app).post(URL).send({ email: 'a@b.com', password: 'correct-password' });
     expect(res.status).toBe(403);
     expect(res.body.error).toMatch(/disabled/i);
   });
-});
 
-// ─────────────────────────────────────────────
-// POST /v1/auth/send-sms
-// ─────────────────────────────────────────────
-describe('POST /v1/auth/send-sms', () => {
-  const URL = '/v1/auth/send-sms';
+  test('200 — configured admin username gets direct admin access', async () => {
+    const res = await request(app).post(URL).send({ username: 'admin', password: 'admin123' });
 
-  test('200 — sends code successfully', async () => {
-    db.query.mockResolvedValueOnce({ rows: [] }); // INSERT mfa_code
-
-    const res = await request(app).post(URL).send({ user_id: 1 });
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('expires_in', 300);
-  });
-
-  test('400 — missing user_id', async () => {
-    const res = await request(app).post(URL).send({});
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/user_id/i);
-  });
-
-  test('400 — null user_id', async () => {
-    const res = await request(app).post(URL).send({ user_id: null });
-    expect(res.status).toBe(400);
-  });
-});
-
-// ─────────────────────────────────────────────
-// POST /v1/auth/verify-mfa
-// ─────────────────────────────────────────────
-describe('POST /v1/auth/verify-mfa', () => {
-  const URL = '/v1/auth/verify-mfa';
-
-  test('200 — valid code returns JWT', async () => {
-    db.query
-      .mockResolvedValueOnce({ rows: [{ id: 10, expires_at: new Date(Date.now() + 60000) }] }) // valid code
-      .mockResolvedValueOnce({ rows: [] }) // mark used
-      .mockResolvedValueOnce({ rows: [] }) // update last_login
-      .mockResolvedValueOnce({
-        rows: [{ user_id: 1, email: 'a@b.com', name: 'Test', role: 'user', status: 'active', plan: 'free' }],
-      });
-
-    const res = await request(app).post(URL).send({ user_id: 1, code: '123456' });
-    expect(res.status).toBe(200);
+    expect(res.body.mfa_required).toBe(false);
+    expect(res.body.admin_access).toBe(true);
+    expect(res.body.user.role).toBe('admin');
     expect(res.body).toHaveProperty('token');
-    expect(res.body).toHaveProperty('user');
-    expect(res.body.user.email).toBe('a@b.com');
   });
 
-  test('400 — missing user_id', async () => {
-    const res = await request(app).post(URL).send({ code: '123456' });
-    expect(res.status).toBe(400);
-  });
+  test('401 — wrong admin password is rejected', async () => {
+    const res = await request(app).post(URL).send({ username: 'admin', password: 'wrong-password' });
 
-  test('400 — missing code', async () => {
-    const res = await request(app).post(URL).send({ user_id: 1 });
-    expect(res.status).toBe(400);
-  });
-
-  test('401 — invalid code', async () => {
-    db.query.mockResolvedValueOnce({ rows: [] }); // no matching code
-
-    const res = await request(app).post(URL).send({ user_id: 1, code: '000000' });
     expect(res.status).toBe(401);
-    expect(res.body.error).toMatch(/invalid/i);
-  });
-
-  test('401 — expired code', async () => {
-    db.query.mockResolvedValueOnce({
-      rows: [{ id: 10, expires_at: new Date(Date.now() - 60000) }], // expired
-    });
-
-    const res = await request(app).post(URL).send({ user_id: 1, code: '123456' });
-    expect(res.status).toBe(401);
-    expect(res.body.error).toMatch(/expired/i);
+    expect(res.body.error).toMatch(/invalid admin username or password/i);
   });
 });
 
@@ -252,6 +201,21 @@ describe('GET /v1/auth/me', () => {
   test('401 — malformed token', async () => {
     const res = await request(app).get(URL).set('Authorization', 'Bearer not.a.valid.token');
     expect(res.status).toBe(401);
+  });
+
+  test('200 — returns synthetic admin session info', async () => {
+    const token = makeToken({
+      user_id: 0,
+      email: 'admin@admin.local',
+      role: 'admin',
+      username: 'admin',
+      is_admin_session: true,
+    });
+
+    const res = await request(app).get(URL).set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe('admin');
+    expect(res.body.username).toBe('admin');
   });
 
   test('401 — tampered signature', async () => {

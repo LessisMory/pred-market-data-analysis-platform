@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "dev": "node --watch app.js",
-    "db:init": "cat db/00_extensions.sql db/01_users.sql db/02_activity.sql db/03_subscriptions.sql db/04_admin.sql db/05_events.sql db/06_metrics.sql db/07_roles.sql | psql -d ${DB_NAME:-ob_analyzer}",
+    "db:init": "cat db/00_extensions.sql db/01_users.sql db/02_activity.sql db/03_subscriptions.sql db/04_admin.sql db/05_events.sql db/06_metrics.sql db/07_roles.sql db/08_firebase_auth.sql | psql -d ${DB_NAME:-ob_analyzer}",
     "test": "NODE_ENV=test jest --verbose --forceExit",
     "test:coverage": "NODE_ENV=test jest --verbose --forceExit --coverage"
   },
@@ -15,6 +15,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
     "express-rate-limit": "^7.4.0",
+    "firebase-admin": "^12.7.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.0",

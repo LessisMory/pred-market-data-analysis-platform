@@ -11,10 +11,9 @@ const authRoutes = require('./routes/auth');
 const marketsRoutes = require('./routes/markets');
 const walletRoutes = require('./routes/wallet');
 const billingRoutes = require('./routes/billing');
-const reportsRoutes = require('./routes/reports');
-const ordersRoutes = require('./routes/orders');
 const transactionsRoutes = require('./routes/transactions');
 const userRoutes = require('./routes/user');
+const adminRoutes = require('./routes/admin');
 const upstreamConfig = require('./config/upstream');
 const authenticate = require('./middleware/authenticate');
 const { initWebSocket } = require('./ws/stream');
@@ -24,7 +23,12 @@ const server = http.createServer(app);
 const PORT = config.port;
 
 // ─── Security middleware ───
-app.use(helmet());
+// The prototype frontend (served separately by nginx) loads React, ReactDOM,
+// Babel, and fonts from CDNs. In local development, skip Helmet entirely so
+// CSP does not block those assets.
+if (config.isProd) {
+  app.use(helmet());
+}
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -45,31 +49,26 @@ app.use('/v1', apiLimiter);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/api-docs.json', (_req, res) => res.json(swaggerSpec));
 
-// Analytics (existing)
+// Analytics data endpoints (prices, markets, trades, etc.)
 app.use('/api/analytics', authenticate, analyticsRoutes);
 
 // Auth — strict rate limiter on sensitive endpoints
 app.use('/v1/auth/login', authLimiter);
-app.use('/v1/auth/send-sms', authLimiter);
-app.use('/v1/auth/verify-mfa', authLimiter);
-app.use('/v1/auth/phone/send-code', authLimiter);
-app.use('/v1/auth/phone/verify', authLimiter);
 app.use('/v1/auth', authRoutes);
 
-// Markets & Trading
+// Markets
 app.use('/v1/markets', marketsRoutes);
-app.use('/v1/orders', ordersRoutes);
 
 // Wallet & Performance
 app.use('/v1/wallet', walletRoutes);
 
-// Billing, Transactions & Reports
+// Billing & Transactions
 app.use('/v1/billing', billingRoutes);
 app.use('/v1/transactions', transactionsRoutes);
-app.use('/v1/reports', reportsRoutes);
 
 // User Profile
 app.use('/v1/user', userRoutes);
+app.use('/v1/admin', adminRoutes);
 
 // WebSocket stream
 initWebSocket(server);

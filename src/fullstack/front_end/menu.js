@@ -1,6 +1,15 @@
 const { C, Logo, Tag } = window;
 const { useState, useEffect } = React;
 
+const formatPlanName = (plan) => {
+  const key = String(plan || '').toLowerCase();
+
+  if (key === 'premium' || key === 'pro') return 'Pro Plan';
+  if (key === 'institutional' || key === 'elite') return 'Elite Plan';
+  if (key === 'free') return 'Free Plan';
+  return plan || 'Free Plan';
+};
+
 const MenuScreen = () => {
   const [userName, setUserName]     = useState("Trader");
   const [userPlan, setUserPlan]     = useState("Pro Plan");
@@ -11,21 +20,36 @@ const MenuScreen = () => {
     upVol: "$1.2M", dnVol: "$840K"
   });
 
-  // GET /v1/user/profile — load user identity, plan tier, and role
+  // GET /v1/user/me — load user identity, plan tier, and role
   useEffect(() => {
-    // try {
-    //   const res = await fetch('https://api.yourbackend.com/v1/user/profile', {
-    //     headers: { 'Authorization': `Bearer ${localStorage.getItem('jwt_token')}` }
-    //   });
-    //   const data = await res.json();
-    //   setUserName(data.firstName);
-    //   setUserPlan(data.planName);
-    //   setIsAdmin(data.role === 'admin');  // confirm field name: data.role or data.user.role
-    // } catch (err) { console.error(err); }
+    const fetchUserSummary = async () => {
+      try {
+        await window.FirebaseAuthClient?.ensureSession?.();
+        const res = await fetch(`/v1/user/me`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('jwt_token')}` }
+        });
 
-    const savedName = localStorage.getItem('ob_user_name');
-    if (savedName) setUserName(savedName);
-    setIsAdmin(localStorage.getItem('ob_user_role') === 'admin');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        const resolvedName = data.name || [data.firstName, data.lastName].filter(Boolean).join(' ').trim() || 'Trader';
+        const resolvedPlan = formatPlanName(data.planName || data.plan);
+
+        setUserName(resolvedName);
+        setUserPlan(resolvedPlan);
+        setIsAdmin(data.role === 'admin');
+        localStorage.setItem('ob_user_name', resolvedName);
+        localStorage.setItem('ob_user_role', data.role || 'user');
+        localStorage.setItem('ob_auth_source', data.authProvider || 'password');
+      } catch (err) {
+        console.error('Failed to fetch user summary:', err);
+        const savedName = localStorage.getItem('ob_user_name');
+        if (savedName) setUserName(savedName);
+        setIsAdmin(localStorage.getItem('ob_user_role') === 'admin');
+      }
+    };
+
+    fetchUserSummary();
   }, []);
 
   // WS /stream/market-pulse — subscribe to live BTC price and Polymarket probability feed
@@ -49,18 +73,22 @@ const MenuScreen = () => {
   }, []);
 
   const menuItems = [
-    { key: "terminal",   icon: "📊", label: "Dashboard",           desc: "Live BTC/USD price, order book and binary option probability charts",        color: C.accent, badge: "LIVE" },
+    { key: "terminal",   icon: "📊", label: "Dashboard",           desc: "BTC 15-minute prediction-market terminal with live-style charts, depth views, and heatmaps", color: C.accent, badge: "LIVE" },
     { key: "wallet",     icon: "💰", label: "My Wallet",           desc: "Track your trading performance P&L, and signal confidence for BTC markets",  color: C.blue },
     { key: "history",    icon: "🧾", label: "Transaction History", desc: "View all past payments, invoices and subscription billing activity",          color: C.amber },
     { key: "membership", icon: "⭐", label: "Membership",          desc: "Manage your plan — upgrade to Pro or Elite for full data access",             color: C.accent, badge: "PRO" },
-    { key: "reports",    icon: "📈", label: "Reporting",           desc: "Generate performance reports, export data and review backtesting results",    color: C.purple },
     { key: "profile",    icon: "👤", label: "My Profile",          desc: "Edit your account details, settings, API keys and notification preferences", color: C.muted }
   ];
 
-  const handleSignOut = () => {
-    localStorage.removeItem('ob_user_name');
-    localStorage.removeItem('jwt_token');
-    localStorage.removeItem('ob_user_role');
+  const handleSignOut = async () => {
+    if (window.FirebaseAuthClient) {
+      await window.FirebaseAuthClient.logout();
+    } else {
+      localStorage.removeItem('ob_user_name');
+      localStorage.removeItem('jwt_token');
+      localStorage.removeItem('ob_user_role');
+      localStorage.removeItem('ob_auth_source');
+    }
     window.location.href = 'index.html';
   };
 
