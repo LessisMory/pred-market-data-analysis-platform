@@ -136,7 +136,7 @@ const HistoryScreen = () => {
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <Tag color={C.accent}>{currentPlan}</Tag>
               <span style={{ fontSize: 13, color: C.white }}>Member since {memberSince}</span>
-              <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12, border: `1px solid ${C.border}` }}>Manage Plan</Btn>
+              <Btn variant="ghost" style={{ padding: "6px 12px", fontSize: 12, border: `1px solid ${C.border}` }} onClick={() => window.location.href = 'membership.html'}>Manage Plan</Btn>
             </div>
           </div>
         </div>
