@@ -22,18 +22,53 @@ const LoginScreen = () => {
     });
   }, []);
 
-  const storeSessionAndRedirect = (data) => {
+  const storeSessionAndRedirect = async (data) => {
+    
+    if (String(data.user?.status).toUpperCase() === 'DISABLED') {
+      if (window.FirebaseAuthClient) {
+        await window.FirebaseAuthClient.logout();
+      }
+      if (window.showErrorModal) {
+        window.showErrorModal('Access Denied: Your account has been suspended by an administrator.');
+      }
+      return;
+    }
     const resolvedName = data.user?.name || [data.user?.firstName, data.user?.lastName].filter(Boolean).join(' ').trim() || 'User';
     localStorage.setItem('jwt_token', data.token);
     localStorage.setItem('ob_user_name', resolvedName);
     localStorage.setItem('ob_user_role', data.user?.role || 'user');
+    
     localStorage.setItem('ob_auth_source', data.user?.authProvider || (data.user?.role === 'admin' ? 'admin' : 'password'));
-    window.location.href = data.user?.role === 'admin' ? 'admin.html' : 'menu.html';
+
+    if (window.showSuccessToast) {
+      window.showSuccessToast("SYSTEM: Identity verified. Booting terminal...");
+    }
+    
+    setTimeout(() => {
+      window.location.href = data.user?.role === 'admin' ? 'admin.html' : 'menu.html';
+    }, 1200);
   };
 
   const finalizeSignIn = async () => {
     const user = await window.FirebaseAuthClient.syncSession();
-    window.location.href = user.role === 'admin' ? 'admin.html' : 'menu.html';
+
+    if (String(user.status).toUpperCase() === 'DISABLED') {
+      if (window.FirebaseAuthClient) {
+        await window.FirebaseAuthClient.logout();
+      }
+      if (window.showErrorModal) {
+        window.showErrorModal('Access Denied: Your account has been suspended by an administrator.');
+      }
+      return; 
+    }
+
+    if (window.showSuccessToast) {
+      window.showSuccessToast("SYSTEM: OAuth verified. Booting terminal...");
+    }
+
+    setTimeout(() => {
+      window.location.href = user.role === 'admin' ? 'admin.html' : 'menu.html';
+    }, 1200);
   };
 
   const looksLikeEmail = (value) => /\S+@\S+\.\S+/.test(value);
@@ -77,7 +112,12 @@ const LoginScreen = () => {
       storeSessionAndRedirect(data);
     } catch (err) {
       console.error(err);
-      alert(err.message || 'Login failed');
+      
+      if (window.showErrorModal) {
+        window.showErrorModal(err.message || 'Authentication failed. Please check your credentials.');
+      } else {
+        console.error("Login Error:", err.message);
+      }
     }
   };
 
@@ -87,7 +127,10 @@ const LoginScreen = () => {
       await finalizeSignIn();
     } catch (err) {
       console.error(err);
-      alert(err.message || `${provider} sign-in failed`);
+      
+      if (window.showErrorModal) {
+        window.showErrorModal(`${provider.toUpperCase()} access denied. ${err.message}`);
+      }
     }
   };
 

@@ -22,18 +22,53 @@ const HomeScreen = () => {
     });
   }, []);
 
-  const storeSessionAndRedirect = (data) => {
+  const storeSessionAndRedirect = async (data) => {
+    
+    if (String(data.user?.status).toUpperCase() === 'DISABLED') {
+      if (window.FirebaseAuthClient) {
+        await window.FirebaseAuthClient.logout();
+      }
+      if (window.showErrorModal) {
+        window.showErrorModal('Access Denied: Your account has been suspended by an administrator.');
+      }
+      return;
+    }
+
     const resolvedName = data.user?.name || [data.user?.firstName, data.user?.lastName].filter(Boolean).join(' ').trim() || 'User';
     localStorage.setItem('jwt_token', data.token);
     localStorage.setItem('ob_user_name', resolvedName);
     localStorage.setItem('ob_user_role', data.user?.role || 'user');
     localStorage.setItem('ob_auth_source', data.user?.authProvider || 'password');
-    window.location.href = data.user?.role === 'admin' ? 'admin.html' : 'menu.html';
+
+    if (window.showSuccessToast) {
+      window.showSuccessToast(`Welcome back, ${resolvedName}. Initializing terminal...`);
+    }
+
+    setTimeout(() => {
+      window.location.href = data.user?.role === 'admin' ? 'admin.html' : 'menu.html';
+    }, 1200);
   };
 
   const finalizeSignIn = async () => {
     const user = await window.FirebaseAuthClient.syncSession();
-    window.location.href = user.role === 'admin' ? 'admin.html' : 'menu.html';
+
+    if (String(user.status).toUpperCase() === 'DISABLED') {
+      if (window.FirebaseAuthClient) {
+        await window.FirebaseAuthClient.logout();
+      }
+      if (window.showErrorModal) {
+        window.showErrorModal('Access Denied: Your account has been suspended by an administrator.');
+      }
+      return;
+    }
+
+    if (window.showSuccessToast) {
+      window.showSuccessToast("SYSTEM: OAuth verified. Booting terminal...");
+    }
+
+    setTimeout(() => {
+      window.location.href = user.role === 'admin' ? 'admin.html' : 'menu.html';
+    }, 1200);
   };
 
   const looksLikeEmail = (value) => /\S+@\S+\.\S+/.test(value);
@@ -77,20 +112,32 @@ const HomeScreen = () => {
         throw new Error(data.error || 'Login failed');
       }
 
+      
       storeSessionAndRedirect(data);
     } catch (err) {
       console.error(err);
-      alert(err.message || 'Login failed');
+      
+      if (window.showErrorModal) {
+        window.showErrorModal(err.message || 'Authentication failed. Please check your credentials.');
+      } else {
+        console.error("Critical: showErrorModal not found", err);
+      }
     }
   };
 
   const handleOAuthLogin = async (provider) => {
     try {
       await window.FirebaseAuthClient.signInWithProvider(provider);
+      
+      if (window.showSuccessToast) {
+        window.showSuccessToast("OAuth verified. Syncing profile...");
+      }
+      
       await finalizeSignIn();
     } catch (err) {
       console.error(err);
-      alert(err.message || `${provider} sign-in failed`);
+
+      window.showErrorModal(`${provider.toUpperCase()} authentication failed: ${err.message}`);
     }
   };
 
