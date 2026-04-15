@@ -181,6 +181,7 @@ security_analysis_owasp_zap:
     DAST_TARGET_OPENAPI_URL: "http://dast-target:8000/openapi.json"
   script:
     - mkdir -p zap-report
+    - touch zap-report/zap-report.json zap-report/zap-report.html zap-report/zap-report.md
     - export DAST_IMAGE="data-service-api-dast:${CI_COMMIT_SHORT_SHA}"
     - docker build --pull -f "$API_DIR/Dockerfile" -t "$DAST_IMAGE" "$DATA_SERVICE_DIR"
     - docker network create dast-net
@@ -199,18 +200,27 @@ security_analysis_owasp_zap:
         sleep 2
       done
     - |
-      docker run --rm \
+      set +e
+      docker run \
+        --name zap-scanner \
         --network dast-net \
-        -v "$CI_PROJECT_DIR/zap-report:/zap/wrk:rw" \
         ghcr.io/zaproxy/zaproxy:stable \
         zap-api-scan.py \
           -t "$DAST_TARGET_OPENAPI_URL" \
           -f openapi \
-          -J zap-report.json \
-          -r zap-report.html \
-          -w zap-report.md
+          -J /zap/wrk/zap-report.json \
+          -r /zap/wrk/zap-report.html \
+          -w /zap/wrk/zap-report.md
+      ZAP_EXIT_CODE=$?
+      set -e
+      echo "OWASP ZAP exit code: $ZAP_EXIT_CODE"
+      docker cp zap-scanner:/zap/wrk/zap-report.json zap-report/zap-report.json || true
+      docker cp zap-scanner:/zap/wrk/zap-report.html zap-report/zap-report.html || true
+      docker cp zap-scanner:/zap/wrk/zap-report.md zap-report/zap-report.md || true
+      exit "$ZAP_EXIT_CODE"
   after_script:
     - docker logs dast-target || true
+    - docker rm -f zap-scanner >/dev/null 2>&1 || true
     - docker rm -f dast-target >/dev/null 2>&1 || true
     - docker network rm dast-net >/dev/null 2>&1 || true
   artifacts:
