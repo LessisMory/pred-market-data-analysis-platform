@@ -1,6 +1,64 @@
 const { C, Logo, Tag } = window;
 const { useState, useEffect } = React;
 
+const LIVE_BTC_SYMBOL = 'BTC/USD';
+
+const buildStreamUrl = () => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}/stream`;
+};
+
+const toFiniteNumber = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const normalizeLivePriceTimestamp = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) {
+    return null;
+  }
+
+  const numeric = Number(raw);
+  const parsed = Number.isFinite(numeric) && /^\d+$/.test(raw)
+    ? new Date(numeric)
+    : new Date(raw);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+};
+
+const normalizeLivePriceTick = (payload = {}) => {
+  const data = payload?.data ?? payload;
+  const btcPrice = toFiniteNumber(data?.value ?? data?.price);
+  const timestamp = normalizeLivePriceTimestamp(data?.timestamp ?? payload?.timestamp);
+  if (btcPrice === null || !timestamp) {
+    return null;
+  }
+
+  return {
+    symbol: String(data?.symbol || LIVE_BTC_SYMBOL).trim().toUpperCase(),
+    btcPrice,
+    timestamp,
+  };
+};
+
+const formatSignedPercent = (value) => {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    return 'n/a';
+  }
+
+  const numeric = Number(value);
+  return `${numeric >= 0 ? '+' : ''}${numeric.toFixed(2)}%`;
+};
+
 const formatPlanName = (plan) => {
   const key = String(plan || '').toLowerCase();
 
@@ -14,6 +72,7 @@ const MenuScreen = () => {
   const [userName, setUserName]     = useState("Trader");
   const [userPlan, setUserPlan]     = useState("Pro Plan");
   const [isAdmin, setIsAdmin]       = useState(false);
+  const [isBtcFeedLive, setIsBtcFeedLive] = useState(false);
   const [marketData, setMarketData] = useState({
     btcPrice: 67420.50, btcChange: "+2.14%",
     upProb: 0.620, dnProb: 0.380,
@@ -52,24 +111,134 @@ const MenuScreen = () => {
     fetchUserSummary();
   }, []);
 
-  // WS /stream/market-pulse — subscribe to live BTC price and Polymarket probability feed
   useEffect(() => {
-    // const ws = new WebSocket('wss://api.yourbackend.com/stream/market-pulse');
-    // ws.onmessage = (event) => {
-    //   const data = JSON.parse(event.data);
-    //   setMarketData(prev => ({ ...prev, ...data }));
-    // };
-    // return () => ws.close();
-
     const interval = setInterval(() => {
       setMarketData(prev => {
-        const pChange    = (Math.random() - 0.5) * 15;
         const probChange = (Math.random() - 0.5) * 0.01;
         const newUp      = Math.min(Math.max(prev.upProb + probChange, 0.01), 0.99);
-        return { ...prev, btcPrice: +(prev.btcPrice + pChange).toFixed(2), upProb: +newUp.toFixed(3), dnProb: +(1 - newUp).toFixed(3) };
+        return { ...prev, upProb: +newUp.toFixed(3), dnProb: +(1 - newUp).toFixed(3) };
       });
     }, 2000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let socket = null;
+    let reconnectTimer = null;
+
+    const clearReconnect = () => {
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    };
+
+    const closeSocket = () => {
+      const activeSocket = socket;
+      socket = null;
+
+      if (!activeSocket) {
+        return;
+      }
+
+      activeSocket.onopen = null;
+      activeSocket.onmessage = null;
+      activeSocket.onerror = null;
+      activeSocket.onclose = null;
+
+      if (
+        activeSocket.readyState === window.WebSocket.OPEN ||
+        activeSocket.readyState === window.WebSocket.CONNECTING
+      ) {
+        activeSocket.close();
+      }
+    };
+
+    const scheduleReconnect = () => {
+      clearReconnect();
+      if (cancelled) {
+        return;
+      }
+
+      reconnectTimer = window.setTimeout(connect, 3000);
+    };
+
+    function connect() {
+      if (cancelled) {
+        return;
+      }
+
+      const nextSocket = new window.WebSocket(buildStreamUrl());
+      socket = nextSocket;
+
+      nextSocket.onopen = () => {
+        if (cancelled || socket !== nextSocket) {
+          return;
+        }
+
+        setIsBtcFeedLive(true);
+        nextSocket.send(JSON.stringify({
+          action: 'subscribe',
+          channel: 'prices',
+          symbol: 'btc/usd',
+        }));
+      };
+
+      nextSocket.onmessage = (event) => {
+        let payload;
+        try {
+          payload = JSON.parse(event.data);
+        } catch (_err) {
+          return;
+        }
+
+        if (payload?.type !== 'prices') {
+          return;
+        }
+
+        const tick = normalizeLivePriceTick(payload);
+        if (!tick) {
+          return;
+        }
+
+        setMarketData((prev) => {
+          const previousPrice = toFiniteNumber(prev.btcPrice);
+          const btcChange = previousPrice !== null && previousPrice !== 0
+            ? formatSignedPercent(((tick.btcPrice - previousPrice) / previousPrice) * 100)
+            : prev.btcChange;
+
+          return {
+            ...prev,
+            btcPrice: tick.btcPrice,
+            btcChange,
+          };
+        });
+      };
+
+      nextSocket.onerror = () => {
+        setIsBtcFeedLive(false);
+        nextSocket.close();
+      };
+
+      nextSocket.onclose = () => {
+        if (socket === nextSocket) {
+          socket = null;
+        }
+
+        setIsBtcFeedLive(false);
+        scheduleReconnect();
+      };
+    }
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      clearReconnect();
+      closeSocket();
+      setIsBtcFeedLive(false);
+    };
   }, []);
 
   const menuItems = [
@@ -130,14 +299,21 @@ const MenuScreen = () => {
 
             <div style={{ flex: 1.5, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
-                <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>BTC/USD (Binance Oracle)</div>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>
+                  BTC/USD (Polymarket RTDS)
+                  <span style={{ color: isBtcFeedLive ? C.accent : C.red, marginLeft: 8 }}>
+                    {isBtcFeedLive ? 'LIVE' : 'RETRYING'}
+                  </span>
+                </div>
                 <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 28, fontWeight: 600, color: C.white }}>
                   ${marketData.btcPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>24h Change</div>
-                <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 16, color: C.accent }}>{marketData.btcChange}</div>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Tick Change</div>
+                <div style={{ fontFamily: "'JetBrains Mono'", fontSize: 16, color: String(marketData.btcChange).startsWith('-') ? C.red : C.accent }}>
+                  {marketData.btcChange}
+                </div>
               </div>
             </div>
 

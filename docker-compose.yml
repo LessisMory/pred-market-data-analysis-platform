@@ -15,10 +15,290 @@ services:
       - ./src/fullstack/back_end/db:/docker-entrypoint-initdb.d:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ob_analyzer}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 20
+
+  data_postgres:
+    build:
+      context: ./src/data_service/database
+      dockerfile: Dockerfile
+    image: persistence_postgres:latest
+    container_name: persistence_postgres
+    command: >
+      postgres
+      -c wal_level=logical
+      -c max_wal_senders=10
+      -c max_replication_slots=10
+      -c max_logical_replication_workers=10
+    environment:
+      POSTGRES_DB: ${DATA_POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${DATA_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATA_POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${DATA_POSTGRES_PUBLIC_PORT:-5433}:5432"
+    volumes:
+      - data_postgres_data:/var/lib/postgresql/data
+      - ./src/data_service/database/schema:/schema:ro
+      - ./src/data_service/database/init/load_schema.sql:/docker-entrypoint-initdb.d/01_load_schema.sql:ro
+      - ./src/data_service/database/init/setup_cdc.sql:/docker-entrypoint-initdb.d/02_setup_cdc.sql:ro
+    networks:
+      - data_pipeline
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  data_initializer:
+    build:
+      context: ./src/data_service
+      dockerfile: database/data_initialization/Dockerfile
+    image: data_initializer:latest
+    depends_on:
+      data_postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DB: ${DATA_POSTGRES_DB:-postgres}
+      POSTGRES_HOST: data_postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${DATA_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${DATA_POSTGRES_PASSWORD:-postgres}
+      DB_CONNECT_TIMEOUT_SECONDS: ${DB_CONNECT_TIMEOUT_SECONDS:-5}
+      DB_CONNECT_RETRY_SECONDS: ${DB_CONNECT_RETRY_SECONDS:-5}
+      REFRESH_INTERVAL_SECONDS: ${REFRESH_INTERVAL_SECONDS:-43200}
+      DATA_INIT_REQUEST_TIMEOUT_SECONDS: ${DATA_INIT_REQUEST_TIMEOUT_SECONDS:-30}
+      DATA_INIT_SERIES_PAGE_SIZE: ${DATA_INIT_SERIES_PAGE_SIZE:-100}
+      DATA_INIT_EVENT_PAGE_SIZE: ${DATA_INIT_EVENT_PAGE_SIZE:-100}
+      DATA_INIT_INSERT_BATCH_SIZE: ${DATA_INIT_INSERT_BATCH_SIZE:-250}
+    networks:
+      - data_pipeline
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${REDIS_PUBLIC_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - inflow_bus
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  inflow_gateway:
+    build:
+      context: ./src/data_service
+      dockerfile: inflow_gateway/Dockerfile
+    container_name: inflow_gateway
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      GAMMA_EVENTS_URL: ${GAMMA_EVENTS_URL:-https://gamma-api.polymarket.com/events}
+      MARKET_WS_URL: ${MARKET_WS_URL:-wss://ws-subscriptions-clob.polymarket.com/ws/market}
+      LIVE_DATA_WS_URL: ${LIVE_DATA_WS_URL:-wss://ws-live-data.polymarket.com}
+      DEFAULT_MARKET_TAG: ${DEFAULT_MARKET_TAG:-102467}
+      MARKET_DURATION_SECONDS: ${MARKET_DURATION_SECONDS:-900}
+      MARKET_START_LEAD_SECONDS: ${MARKET_START_LEAD_SECONDS:-60}
+      MARKET_STREAM_RETRIES: ${MARKET_STREAM_RETRIES:-3}
+      REDIS_URL: redis://redis:6379/0
+      CHAINLINK_REDIS_CHANNEL: ${CHAINLINK_REDIS_CHANNEL:-chainlink.crypto.prices}
+      BINANCE_REDIS_CHANNEL: ${BINANCE_REDIS_CHANNEL:-binance.crypto.prices}
+      MARKET_REDIS_CHANNEL_PREFIX: ${MARKET_REDIS_CHANNEL_PREFIX:-markets.crypto}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - inflow_bus
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka-native:4.1.1
+    container_name: kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_CLUSTER_ID: ${KAFKA_CLUSTER_ID:-MkU3OEVBNTcwNTJENDM2Qk}
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,EXTERNAL://0.0.0.0:19092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:${KAFKA_EXTERNAL_PORT:-19092}
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_LOG_RETENTION_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_HOURS: 1
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 900000
+    ports:
+      - "${KAFKA_EXTERNAL_PORT:-19092}:19092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - data_pipeline
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/9092'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  kafka_bridge:
+    build:
+      context: ./src/data_service
+      dockerfile: transform_layer/Dockerfile
+    container_name: transform_kafka_bridge
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SERVICE: kafka_bridge
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379/0
+      REDIS_CHANNEL_PATTERNS: ${REDIS_CHANNEL_PATTERNS:-markets.crypto:*}
+      KAFKA_RAW_TOPIC: ${KAFKA_RAW_TOPIC:-market.raw}
+      KAFKA_PERSIST_TOPIC: ${KAFKA_PERSIST_TOPIC:-market.persisted}
+    networks:
+      - data_pipeline
+      - inflow_bus
+    restart: unless-stopped
+
+  transform_writer:
+    build:
+      context: ./src/data_service
+      dockerfile: transform_layer/Dockerfile
+    container_name: transform_writer
+    depends_on:
+      kafka:
+        condition: service_healthy
+      data_postgres:
+        condition: service_healthy
+    environment:
+      SERVICE: transform_writer
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_RAW_TOPIC: ${KAFKA_RAW_TOPIC:-market.raw}
+      KAFKA_PERSIST_TOPIC: ${KAFKA_PERSIST_TOPIC:-market.persisted}
+      KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-transform-writer}
+      POSTGRES_DSN: postgresql://${DATA_POSTGRES_USER:-postgres}:${DATA_POSTGRES_PASSWORD:-postgres}@data_postgres:5432/${DATA_POSTGRES_DB:-postgres}
+      ORDER_BOOK_UPDATES_TABLE: ${ORDER_BOOK_UPDATES_TABLE:-order_book_updates}
+      ORDER_BOOK_SNAPSHOTS_TABLE: ${ORDER_BOOK_SNAPSHOTS_TABLE:-order_book_snapshots}
+      ORDER_BOOK_TRADES_TABLE: ${ORDER_BOOK_TRADES_TABLE:-order_book_trades}
+      BATCH_SIZE: ${BATCH_SIZE:-500}
+      BATCH_INTERVAL_SECONDS: ${BATCH_INTERVAL_SECONDS:-1.0}
+    networks:
+      - data_pipeline
+    restart: unless-stopped
+
+  debezium:
+    image: debezium/connect:2.7.3.Final
+    container_name: transform_debezium
+    depends_on:
+      kafka:
+        condition: service_healthy
+      data_postgres:
+        condition: service_healthy
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: debezium-connect
+      CONFIG_STORAGE_TOPIC: debezium_connect_configs
+      OFFSET_STORAGE_TOPIC: debezium_connect_offsets
+      STATUS_STORAGE_TOPIC: debezium_connect_status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      REST_ADVERTISED_HOST_NAME: debezium
+    ports:
+      - "${DEBEZIUM_PUBLIC_PORT:-18083}:8083"
+    networks:
+      - data_pipeline
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: transform_clickhouse
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-analytics}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_LISTEN_HOST: 0.0.0.0
+    ports:
+      - "${CLICKHOUSE_HTTP_PORT:-8123}:8123"
+      - "${CLICKHOUSE_NATIVE_PORT:-9000}:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./src/data_service/transform_layer/template.sql:/docker-entrypoint-initdb.d/01_template.sql:ro
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    networks:
+      - data_pipeline
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "clickhouse-client --user default --password \"$${CLICKHOUSE_PASSWORD}\" --query 'SELECT 1' >/dev/null 2>&1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  data_service_api:
+    build:
+      context: ./src/data_service
+      dockerfile: api/Dockerfile
+    container_name: data_service_api
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-analytics}
+      CLICKHOUSE_SECURE: "false"
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+    ports:
+      - "${DATA_SERVICE_API_PORT:-8000}:8000"
+    networks:
+      - data_pipeline
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   backend:
     build:
@@ -27,6 +307,8 @@ services:
     container_name: pred-market-app
     depends_on:
       db:
+        condition: service_healthy
+      data_service_api:
         condition: service_healthy
     environment:
       NODE_ENV: ${NODE_ENV:-production}
@@ -43,7 +325,7 @@ services:
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       GAMMA_API_BASE_URL: ${GAMMA_API_BASE_URL:-https://gamma-api.polymarket.com}
-      DATA_SERVICE_API_BASE_URL: ${DATA_SERVICE_API_BASE_URL:-http://localhost:8000}
+      DATA_SERVICE_API_BASE_URL: ${DATA_SERVICE_API_BASE_URL:-http://data_service_api:8000}
       UPSTREAM_TIMEOUT_MS: ${UPSTREAM_TIMEOUT_MS:-10000}
       OAUTH_REDIRECT_BASE: ${OAUTH_REDIRECT_BASE:-http://localhost:3000}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
@@ -58,6 +340,9 @@ services:
       FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
     expose:
       - "3000"
+    networks:
+      - default
+      - data_pipeline
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "node", "-e", "const http=require('http');const req=http.get('http://127.0.0.1:3000/health',res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));"]
@@ -86,3 +371,13 @@ services:
 
 volumes:
   postgres_data:
+  data_postgres_data:
+  redis_data:
+  kafka_data:
+  clickhouse_data:
+
+networks:
+  data_pipeline:
+    driver: bridge
+  inflow_bus:
+    driver: bridge

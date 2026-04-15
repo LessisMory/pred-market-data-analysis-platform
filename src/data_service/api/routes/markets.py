@@ -138,6 +138,7 @@ def _serialize_chart_point(record: dict[str, Any]) -> dict[str, Any]:
             "total_ask_size": total_ask_size,
         },
         "mid_price": _serialize_float(record.get("l1_passive_mid_price")),
+        "theoretical_price": _serialize_float(record.get("theoretical_price")),
         "spread": _serialize_float(record.get("best_price_spread")),
         "imbalance": _serialize_float(record.get("orderbook_imbalance")),
     }
@@ -161,6 +162,9 @@ def _serialize_market_metadata(record: dict[str, Any] | None) -> dict[str, Any]:
             "asset_id": None,
             "market_name": None,
             "token_name": None,
+            "strike_price": None,
+            "resolve_price": None,
+            "result_logic": None,
         }
 
     return {
@@ -169,6 +173,9 @@ def _serialize_market_metadata(record: dict[str, Any] | None) -> dict[str, Any]:
         "asset_id": _serialize_string(record.get("asset_id")),
         "market_name": _serialize_string(record.get("market_name")),
         "token_name": _serialize_string(record.get("token_name")),
+        "strike_price": _serialize_float(record.get("strike_price")),
+        "resolve_price": _serialize_float(record.get("resolve_price")),
+        "result_logic": _serialize_string(record.get("result_logic")),
     }
 
 
@@ -223,7 +230,7 @@ def get_market_depth_volume_chart(
             le=10_000,
             description="Maximum number of latest timestamped chart points to return.",
         ),
-    ] = 100,
+    ] = 1000,
 ) -> dict[str, Any]:
     """Return the latest chart-ready points for a market and asset pair."""
 

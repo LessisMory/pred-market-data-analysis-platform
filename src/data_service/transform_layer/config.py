@@ -57,7 +57,7 @@ class RedisSettings:
 
 @dataclass
 class PostgresSettings:
-    dsn: str = os.getenv("POSTGRES_DSN", "postgresql://postgres:postgres@localhost:5432/postgres")
+    dsn: str = os.getenv("POSTGRES_DSN", "postgresql://postgres:postgres@localhost:5433/postgres")
     order_book_updates_table: str = os.getenv(
         "ORDER_BOOK_UPDATES_TABLE", os.getenv("TARGET_TABLE", "order_book_updates")
     )

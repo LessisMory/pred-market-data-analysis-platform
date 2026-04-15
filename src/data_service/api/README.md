@@ -180,7 +180,7 @@ Required query parameters:
 - `asset_id`
 
 Optional query parameters:
-- `limit` with default `100`, minimum `1`, maximum `10000`
+- `limit` with default `1000`, minimum `1`, maximum `10000`
 
 Example:
 

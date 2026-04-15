@@ -1,510 +1,2289 @@
 const { C, Logo, Btn, Tag } = window;
-const { useState, useEffect, useMemo } = React;
+const { useEffect, useMemo, useRef, useState } = React;
 
-// ─── Section header ───────────────────────────────────────────────────────────
-const SectionHeader = ({ title, sub, controls }) => (
-  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-    <div>
-      <div style={{ fontSize: 10, color: C.muted, letterSpacing: 1 }}>{title}</div>
-      {sub && <div style={{ fontSize: 9, color: C.muted + "99", marginTop: 2 }}>{sub}</div>}
-    </div>
-    {controls && <div style={{ display: "flex", gap: 8, alignItems: "center" }}>{controls}</div>}
+const CONTRACT_LIMIT = 60;
+const SAMPLE_LIMIT = 1000;
+
+const THEME = {
+  shell: '#061117',
+  shellAlt: '#0b1820',
+  ink: '#eef8f4',
+  muted: '#88a39c',
+  line: 'rgba(117, 160, 151, 0.16)',
+  panel: 'rgba(8, 22, 28, 0.82)',
+  panelStrong: 'rgba(12, 31, 39, 0.92)',
+  edge: 'rgba(112, 163, 151, 0.18)',
+  sun: '#ffcb66',
+  ice: '#79d8ff',
+  up: '#2ad79c',
+  upSoft: 'rgba(42, 215, 156, 0.16)',
+  upGlow: 'rgba(42, 215, 156, 0.22)',
+  down: '#ff866b',
+  downSoft: 'rgba(255, 134, 107, 0.16)',
+  downGlow: 'rgba(255, 134, 107, 0.22)',
+  violet: '#8fa8ff',
+};
+
+const TERMINAL_STYLES = `
+  .terminal-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background:
+      radial-gradient(circle at 0% 0%, rgba(121, 216, 255, 0.14), transparent 28%),
+      radial-gradient(circle at 100% 0%, var(--tone-glow), transparent 30%),
+      linear-gradient(180deg, #061117 0%, #07171d 44%, #08131a 100%);
+    color: ${THEME.ink};
+    position: relative;
+    overflow: hidden;
+  }
+
+  .terminal-shell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: linear-gradient(180deg, rgba(0,0,0,0.45), transparent 92%);
+    pointer-events: none;
+  }
+
+  .terminal-topbar,
+  .terminal-main {
+    position: relative;
+    z-index: 1;
+  }
+
+  .terminal-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px clamp(14px, 2vw, 24px);
+    border-bottom: 1px solid ${THEME.edge};
+    background: rgba(4, 15, 20, 0.42);
+    backdrop-filter: blur(16px);
+  }
+
+  .terminal-topbar-left,
+  .terminal-topbar-right,
+  .control-row,
+  .panel-header,
+  .chart-meta,
+  .chart-legend,
+  .snapshot-row,
+  .snapshot-meta,
+  .depth-summary,
+  .depth-legend,
+  .detail-item {
+    display: flex;
+    align-items: center;
+  }
+
+  .terminal-topbar-left,
+  .terminal-topbar-right,
+  .chart-legend,
+  .snapshot-meta,
+  .depth-summary,
+  .depth-legend {
+    gap: 8px;
+  }
+
+  .terminal-main {
+    width: min(1480px, calc(100vw - 16px));
+    margin: 0 auto;
+    flex: 1;
+    min-height: 0;
+    padding: 10px clamp(10px, 1.4vw, 18px) 14px;
+  }
+
+  .terminal-frame {
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 272px minmax(0, 1fr);
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .terminal-sidebar,
+  .terminal-content {
+    min-height: 0;
+    border-radius: 24px;
+    border: 1px solid ${THEME.edge};
+    background: rgba(7, 20, 26, 0.72);
+    backdrop-filter: blur(18px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+  }
+
+  .terminal-sidebar {
+    overflow: auto;
+  }
+
+  .terminal-content {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .sidebar-inner,
+  .content-stack {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sidebar-inner {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .content-stack {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: ${THEME.muted};
+  }
+
+  .status-card,
+  .metric-card,
+  .terminal-panel,
+  .outcome-button,
+  .select-shell,
+  .detail-card {
+    border: 1px solid ${THEME.edge};
+    background: ${THEME.panel};
+    backdrop-filter: blur(18px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+  }
+
+  .status-card {
+    border-radius: 999px;
+    padding: 8px 12px;
+  }
+
+  .status-label {
+    color: ${THEME.muted};
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .status-value {
+    font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: ${THEME.ink};
+  }
+
+  .sidebar-shell {
+    border-radius: 20px;
+    padding: 14px 14px 16px;
+    background:
+      linear-gradient(155deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)),
+      radial-gradient(circle at 88% 16%, var(--tone-soft), transparent 30%),
+      rgba(10, 27, 33, 0.84);
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .sidebar-title {
+    margin-top: 10px;
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-size: clamp(22px, 2.4vw, 30px);
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+  }
+
+  .sidebar-copy {
+    margin-top: 8px;
+    color: #a9c2bb;
+    line-height: 1.55;
+    font-size: 13px;
+  }
+
+  .sidebar-tags {
+    margin-top: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .control-card {
+    padding: 12px 14px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .control-row {
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+
+  .control-label {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: ${THEME.muted};
+  }
+
+  .control-hint {
+    color: ${THEME.ink};
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .select-shell {
+    border-radius: 18px;
+    overflow: hidden;
+    position: relative;
+    background: rgba(0, 0, 0, 0.22);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .select-shell::after {
+    content: 'v';
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: ${THEME.muted};
+    font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+    pointer-events: none;
+  }
+
+  .market-select {
+    width: 100%;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: ${THEME.ink};
+    padding: 13px 14px;
+    padding-right: 38px;
+    font-size: 14px;
+  }
+
+  .outcome-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .outcome-button {
+    border-radius: 18px;
+    padding: 12px 14px;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .outcome-button:hover {
+    transform: translateY(-1px);
+  }
+
+  .outcome-button.is-active {
+    border-color: var(--tone);
+    background: linear-gradient(180deg, var(--tone-soft), rgba(255,255,255,0.02));
+    box-shadow: 0 14px 36px var(--tone-glow);
+  }
+
+  .outcome-button.is-inactive {
+    opacity: 0.72;
+  }
+
+  .outcome-kicker {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: ${THEME.muted};
+  }
+
+  .outcome-name {
+    margin-top: 8px;
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .outcome-copy {
+    margin-top: 8px;
+    color: #a9c2bb;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .summary-strip {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .summary-stat {
+    padding: 6px 7px;
+    border-radius: 18px;
+    border: 1px solid ${THEME.edge};
+    background: rgba(8, 22, 28, 0.88);
+    min-height: 82px;
+  }
+
+  .summary-stat-label {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: ${THEME.muted};
+  }
+
+  .summary-stat-value {
+    margin-top: 10px;
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--summaryColor, ${THEME.ink});
+  }
+
+  .summary-stat-sub {
+    margin-top: 8px;
+    color: #a9c2bb;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .workspace-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .board-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .board-main,
+  .board-side {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+    min-height: 0;
+  }
+
+  .panel-fill {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .terminal-panel {
+    border-radius: 22px;
+    padding: 16px;
+  }
+
+  .panel-header {
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .panel-title {
+    margin-top: 4px;
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-size: 20px;
+    letter-spacing: -0.03em;
+  }
+
+  .panel-copy {
+    margin-top: 4px;
+    color: #a9c2bb;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .chart-meta {
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  .chart-legend {
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: ${THEME.muted};
+    font-size: 11px;
+  }
+
+  .legend-line {
+    width: 24px;
+    height: 0;
+    border-top: 2px solid currentColor;
+    border-radius: 999px;
+  }
+
+  .legend-line.is-dashed {
+    border-top-style: dashed;
+  }
+
+  .legend-line.is-dotted {
+    border-top-style: dotted;
+  }
+
+  .chart-shell {
+    padding: 12px 12px 8px;
+    border-radius: 18px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)),
+      rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .snapshot-slider {
+    flex: 1;
+    min-width: 180px;
+    accent-color: var(--tone);
+  }
+
+  .sidebar-scrubber {
+    display: grid;
+    gap: 12px;
+  }
+
+  .sidebar-scrubber .control-row {
+    margin-bottom: 0;
+  }
+
+  .sidebar-scrubber .scrubber-title {
+    margin-top: 0;
+    font-size: 16px;
+    line-height: 1.2;
+  }
+
+  .sidebar-scrubber .scrubber-readout {
+    margin-top: 0;
+  }
+
+  .sidebar-scrubber .snapshot-slider {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .sidebar-scrubber .snapshot-chip {
+    justify-self: start;
+  }
+
+  .snapshot-chip {
+    padding: 9px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    color: ${THEME.ink};
+    font-size: 12px;
+  }
+
+  .depth-visual {
+    display: grid;
+    gap: 10px;
+  }
+
+  .depth-summary {
+    flex-wrap: wrap;
+    margin-bottom: 0;
+  }
+
+  .depth-pill {
+    padding: 8px 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    font-size: 11px;
+    color: #c4d8d1;
+  }
+
+  .depth-chart-shell {
+    padding: 12px 12px 8px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.05);
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  }
+
+  .imbalance-shell {
+    padding: 12px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.05);
+    background: rgba(255,255,255,0.02);
+  }
+
+  .imbalance-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+
+  .micro-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .micro-stat-grid.is-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .micro-stat {
+    padding: 10px 10px 8px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .micro-stat-label {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: ${THEME.muted};
+  }
+
+  .micro-stat-value {
+    margin-top: 7px;
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-size: 17px;
+  }
+
+  .micro-stat-sub {
+    margin-top: 5px;
+    color: #a9c2bb;
+    font-size: 11px;
+  }
+
+  .scrubber-title {
+    margin-top: 4px;
+    font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .scrubber-readout {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .alert-banner {
+    padding: 14px 18px;
+    border-radius: 22px;
+    border: 1px solid rgba(255, 134, 107, 0.25);
+    background: rgba(255, 134, 107, 0.1);
+    color: #ffd2c7;
+    line-height: 1.5;
+  }
+
+  .empty-state {
+    min-height: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 10px;
+    border-radius: 24px;
+    border: 1px dashed rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.02);
+    color: ${THEME.muted};
+    text-align: center;
+    padding: 20px;
+  }
+
+  .loading-shell {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(circle at 50% 20%, rgba(121, 216, 255, 0.12), transparent 24%),
+      linear-gradient(180deg, #061117 0%, #08151b 100%);
+  }
+
+  .loading-card {
+    padding: 26px 28px;
+    border-radius: 26px;
+    background: rgba(6, 18, 24, 0.88);
+    border: 1px solid ${THEME.edge};
+    text-align: center;
+  }
+
+  .spinner {
+    width: 42px;
+    height: 42px;
+    margin: 0 auto 18px;
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.08);
+    border-top-color: var(--tone);
+    animation: spin 1s linear infinite;
+  }
+
+  @media (max-width: 1320px) {
+    .terminal-frame {
+      grid-template-columns: 250px minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 1180px) {
+    .terminal-frame,
+    .board-grid,
+    .board-main,
+    .board-side,
+    .workspace-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .summary-strip,
+    .micro-stat-grid,
+    .micro-stat-grid.is-compact {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 860px) {
+    .terminal-topbar {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .terminal-topbar-right {
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+
+    .outcome-grid,
+    .summary-strip,
+    .micro-stat-grid,
+    .micro-stat-grid.is-compact {
+      grid-template-columns: 1fr;
+    }
+  }
+`;
+
+const makeContractKey = (contract) => `${contract.marketId || ''}::${contract.assetId || ''}`;
+
+const outcomeSortWeight = (contract) => {
+  const token = String(contract?.tokenName || '').trim().toLowerCase();
+  if (token === 'up') return 0;
+  if (token === 'down') return 1;
+  return 10;
+};
+
+const splitMarketName = (value = '') => {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return { title: 'Market Session', timeLabel: 'Unknown window' };
+  }
+
+  const parts = raw.split(' - ').map((part) => part.trim()).filter(Boolean);
+  if (parts.length <= 1) {
+    return { title: raw, timeLabel: raw };
+  }
+
+  return {
+    title: parts.slice(0, -1).join(' - '),
+    timeLabel: parts[parts.length - 1],
+  };
+};
+
+const formatTimestamp = (value, options = {}) => {
+  if (!value) return 'No timestamp';
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+
+  return parsed.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: options.compact ? undefined : '2-digit',
+  });
+};
+
+const formatWindowTimestamp = (value) => {
+  if (!value) return 'Unknown';
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+
+  return parsed.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
+const formatContractPrice = (value, digits = 1) => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'n/a';
+  }
+
+  return `${(Number(value) * 100).toFixed(digits)}c`;
+};
+
+const formatSignedPercent = (value, digits = 2) => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'n/a';
+  }
+
+  const numeric = Number(value);
+  return `${numeric >= 0 ? '+' : ''}${numeric.toFixed(digits)}%`;
+};
+
+const formatCompactNumber = (value, digits = 2) => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'n/a';
+  }
+
+  return Number(value).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  });
+};
+
+const formatCurrency = (value, digits = 2) => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'n/a';
+  }
+
+  return Number(value).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+};
+
+const formatUsdCompact = (value) => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'n/a';
+  }
+
+  return Number(value).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  });
+};
+
+const formatSpread = (value) => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return 'n/a';
+  }
+
+  return `${(Number(value) * 100).toFixed(2)}c`;
+};
+
+const formatResultLogic = (value, tokenName) => {
+  const text = String(value || '').trim().toLowerCase();
+  const token = String(tokenName || '').trim();
+  const normalizedToken = token.toLowerCase();
+
+  if (!text) return 'Result unavailable';
+  if (text === 'undetermined') return 'Result undetermined';
+  if (text === 'yes') return token ? `${token} wins` : 'Result YES';
+  if (text === 'no') {
+    if (normalizedToken === 'up') return 'Down wins';
+    if (normalizedToken === 'down') return 'Up wins';
+    return 'Result NO';
+  }
+
+  return text.replace(/_/g, ' ');
+};
+
+const buildAuthHeaders = async () => {
+  await window.FirebaseAuthClient?.ensureSession?.();
+
+  const token = localStorage.getItem('jwt_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
+const requestJson = async (url) => {
+  const response = await fetch(url, {
+    headers: await buildAuthHeaders(),
+  });
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch (_err) {
+    payload = null;
+  }
+
+  if (response.status === 401) {
+    window.location.href = 'index.html';
+    throw new Error('Session expired');
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.error || payload?.detail || `HTTP ${response.status}`);
+  }
+
+  return payload;
+};
+
+const toFiniteNumber = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const groupContractsByMarket = (contracts = []) => {
+  const groups = [];
+  const seen = new Map();
+
+  contracts.forEach((contract) => {
+    const key = contract.marketId || contract.slug || contract.label;
+    if (!key) {
+      return;
+    }
+
+    const parsed = splitMarketName(contract.marketName || contract.label || contract.slug);
+    if (!seen.has(key)) {
+      const group = {
+        key,
+        marketId: contract.marketId || null,
+        slug: contract.slug || null,
+        marketName: contract.marketName || parsed.title,
+        title: parsed.title,
+        timeLabel: parsed.timeLabel,
+        contracts: [],
+      };
+      groups.push(group);
+      seen.set(key, group);
+    }
+
+    seen.get(key).contracts.push(contract);
+  });
+
+  return groups.map((group) => ({
+    ...group,
+    contracts: [...group.contracts].sort((left, right) => {
+      const outcomeDelta = outcomeSortWeight(left) - outcomeSortWeight(right);
+      if (outcomeDelta !== 0) return outcomeDelta;
+      return String(left.tokenName || '').localeCompare(String(right.tokenName || ''));
+    }),
+  }));
+};
+
+const pickDefaultContract = (contracts = []) =>
+  contracts.find((contract) => String(contract.tokenName || '').trim().toLowerCase() === 'up') ||
+  contracts[0] ||
+  null;
+
+const deriveOrderbookMid = (snapshot) => {
+  const explicit = snapshot?.midPrice;
+  if (explicit !== null && explicit !== undefined && Number.isFinite(Number(explicit))) {
+    return Number(explicit);
+  }
+
+  const bestBid = snapshot?.bids?.find((level) => Number.isFinite(Number(level?.price)));
+  const bestAsk = snapshot?.asks?.find((level) => Number.isFinite(Number(level?.price)));
+  if (!bestBid || !bestAsk) {
+    return null;
+  }
+
+  return (Number(bestBid.price) + Number(bestAsk.price)) / 2;
+};
+
+const findNearestOraclePoint = (points = [], targetTimestamp) => {
+  if (!points.length || !targetTimestamp) {
+    return null;
+  }
+
+  const target = new Date(targetTimestamp).getTime();
+  if (Number.isNaN(target)) {
+    return null;
+  }
+
+  return points.reduce((closest, point) => {
+    const candidate = new Date(point.timestamp).getTime();
+    if (Number.isNaN(candidate)) {
+      return closest;
+    }
+
+    if (!closest) {
+      return point;
+    }
+
+    const currentDelta = Math.abs(candidate - target);
+    const bestDelta = Math.abs(new Date(closest.timestamp).getTime() - target);
+    return currentDelta < bestDelta ? point : closest;
+  }, null);
+};
+
+const toTimestampMs = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const getMidPriceTimeDomain = (series = []) => {
+  const times = series
+    .map((point) => ({
+      time: new Date(point?.timestamp).getTime(),
+      value: toFiniteNumber(point?.midPrice),
+    }))
+    .filter((point) => !Number.isNaN(point.time) && point.value !== null)
+    .map((point) => point.time);
+
+  if (!times.length) {
+    return null;
+  }
+
+  const start = Math.min(...times);
+  const end = Math.max(...times);
+
+  return {
+    start,
+    end,
+    plotEnd: end > start ? end : start + 1000,
+  };
+};
+
+const getMarketWindowFromContract = (contract) => {
+  if (!contract) {
+    return null;
+  }
+
+  const explicitStart = toTimestampMs(
+    contract.marketStart
+    ?? contract.market_start
+    ?? contract.marketStartTs
+    ?? contract.market_start_ts
+    ?? contract.startDate
+    ?? contract.start_date
+  );
+  const explicitEnd = toTimestampMs(
+    contract.marketEnd
+    ?? contract.market_end
+    ?? contract.marketEndTs
+    ?? contract.market_end_ts
+    ?? contract.endDate
+    ?? contract.end_date
+  );
+
+  if (explicitStart !== null && explicitEnd !== null) {
+    return {
+      start: explicitStart,
+      end: explicitEnd,
+      plotEnd: explicitEnd > explicitStart ? explicitEnd : explicitStart + 1000,
+    };
+  }
+
+  const slug = String(contract.slug || '').trim();
+  const startMatch = slug.match(/([0-9]{10})(?!.*[0-9])/);
+  if (!startMatch) {
+    return null;
+  }
+
+  const durationMatch = slug.match(/-([0-9]+)m-/i);
+  const durationMinutes = Number.parseInt(durationMatch?.[1] || '', 10);
+  const durationMs = (
+    Number.isInteger(durationMinutes) && durationMinutes > 0
+      ? durationMinutes
+      : 15
+  ) * 60 * 1000;
+  const start = Number(startMatch[1]) * 1000;
+  const end = start + durationMs;
+
+  return {
+    start,
+    end,
+    plotEnd: end > start ? end : start + 1000,
+  };
+};
+
+const isWithinTimeDomain = (time, domain) => {
+  if (!domain) {
+    return true;
+  }
+
+  return time >= domain.start && time <= domain.end;
+};
+
+const EmptyState = ({ title, message, height = 220 }) => (
+  <div className="empty-state" style={{ minHeight: height }}>
+    <div style={{ fontFamily: "'Space Grotesk', 'DM Sans', sans-serif", fontSize: 22 }}>{title}</div>
+    <div style={{ maxWidth: 420, lineHeight: 1.6 }}>{message}</div>
   </div>
 );
 
-// ─── Price line chart: Mid Price / Theoretical / BTC Strike ──────────────────
-const PriceLineChart = ({ midPrice, theoretical, btcStrike, height = 200 }) => {
-  const all = [...midPrice, ...theoretical, ...btcStrike];
-  const min = Math.min(...all), max = Math.max(...all);
-  const n = v => 88 - ((v - min) / (max - min + 0.001)) * 76;
-  const pts = arr => arr.map((v, i) => ((i / (arr.length - 1)) * 380 + 10) + "," + n(v)).join(" ");
-  const W = 400, H = 100;
+const SummaryStat = ({ label, value, sub, color }) => (
+  <div className="summary-stat" style={{ '--summaryColor': color || THEME.ink }}>
+    <div className="summary-stat-label">{label}</div>
+    <div className="summary-stat-value">{value}</div>
+    <div className="summary-stat-sub">{sub}</div>
+  </div>
+);
+
+const SnapshotScrubberCard = ({
+  selectedSnapshot,
+  selectedSnapshotIndex,
+  activeSeries,
+  selectedOracleValue,
+  selectedImbalancePct,
+  tone,
+  onSelectTimestamp,
+}) => (
+  <div className="control-card sidebar-scrubber">
+    <div className="control-row">
+      <div className="control-label">Snapshot scrubber</div>
+      <div className="control-hint">
+        {selectedSnapshot?.timestamp ? formatTimestamp(selectedSnapshot.timestamp, { compact: true }) : 'No snapshot'}
+      </div>
+    </div>
+
+    <div className="scrubber-title">
+      {selectedSnapshot?.timestamp ? formatTimestamp(selectedSnapshot.timestamp, { compact: true }) : 'No snapshot selected'}
+    </div>
+
+    <div className="scrubber-readout">
+      <Tag color={tone.base}>Mid {formatContractPrice(selectedSnapshot?.midPrice)}</Tag>
+      <Tag color={THEME.ice}>Theo {formatContractPrice(selectedSnapshot?.theoreticalPrice)}</Tag>
+      <Tag color={THEME.sun}>BTC {formatCurrency(selectedOracleValue, 0)}</Tag>
+      <Tag color={Number(selectedSnapshot?.imbalance) >= 0 ? THEME.up : THEME.down}>
+        Imb {formatSignedPercent(selectedImbalancePct, 1)}
+      </Tag>
+    </div>
+
+    <input
+      type="range"
+      className="snapshot-slider"
+      min="0"
+      max={Math.max(activeSeries.length - 1, 0)}
+      step="1"
+      value={selectedSnapshotIndex}
+      onChange={(event) => {
+        const nextIndex = Number(event.target.value);
+        onSelectTimestamp(activeSeries[nextIndex]?.timestamp || '');
+      }}
+    />
+
+    <button
+      type="button"
+      className="snapshot-chip"
+      onClick={() => onSelectTimestamp(activeSeries[activeSeries.length - 1]?.timestamp || '')}
+    >
+      Latest
+    </button>
+  </div>
+);
+
+const PriceOverlayChart = ({
+  marketSeries,
+  oracleSeries,
+  marketWindow,
+  selectedTimestamp,
+  strikePrice,
+  resolvePrice,
+  toneColor,
+}) => {
+  const timeDomain = marketWindow || getMidPriceTimeDomain(marketSeries);
+  const marketPoints = marketSeries
+    .map((point) => ({
+      time: new Date(point.timestamp).getTime(),
+      value: point.midPrice === null || point.midPrice === undefined ? null : Number(point.midPrice),
+    }))
+    .filter((point) => !Number.isNaN(point.time) && Number.isFinite(point.value));
+  if (!timeDomain || !marketPoints.length) {
+    return (
+      <EmptyState
+        title="No chartable data yet"
+        message="This contract needs valid market samples before the price overlay can render."
+        height={300}
+      />
+    );
+  }
+
+  const boundedMarketPoints = marketPoints.filter((point) => isWithinTimeDomain(point.time, timeDomain));
+  const theoreticalPoints = marketSeries
+    .map((point) => ({
+      time: new Date(point.timestamp).getTime(),
+      value:
+        point.theoreticalPrice === null || point.theoreticalPrice === undefined
+          ? null
+          : Number(point.theoreticalPrice),
+    }))
+    .filter((point) => !Number.isNaN(point.time) && Number.isFinite(point.value))
+    .filter((point) => isWithinTimeDomain(point.time, timeDomain));
+
+  const btcPoints = oracleSeries
+    .map((point) => ({
+      time: new Date(point.timestamp).getTime(),
+      value: point.value === null || point.value === undefined ? null : Number(point.value),
+    }))
+    .filter((point) => !Number.isNaN(point.time) && Number.isFinite(point.value))
+    .filter((point) => isWithinTimeDomain(point.time, timeDomain));
+
+  const width = 920;
+  const height = 300;
+  const padding = { top: 16, right: 82, bottom: 34, left: 58 };
+  const innerWidth = width - padding.left - padding.right;
+  const innerHeight = height - padding.top - padding.bottom;
+  const minTime = timeDomain.start;
+  const maxTime = timeDomain.plotEnd;
+
+  const marketValues = [...boundedMarketPoints, ...theoreticalPoints].map((point) => point.value);
+  const marketMin = marketValues.length ? Math.min(...marketValues) : 0;
+  const marketMax = marketValues.length ? Math.max(...marketValues) : 1;
+  const marketPad = marketValues.length ? Math.max((marketMax - marketMin) * 0.16, 0.05) : 0;
+  const marketLower = Math.max(0, marketMin - marketPad);
+  const marketUpper = Math.min(1, marketMax + marketPad || 1);
+
+  const btcReferenceValues = btcPoints.map((point) => point.value);
+  if (strikePrice !== null && strikePrice !== undefined && Number.isFinite(Number(strikePrice))) {
+    btcReferenceValues.push(Number(strikePrice));
+  }
+  if (resolvePrice !== null && resolvePrice !== undefined && Number.isFinite(Number(resolvePrice))) {
+    btcReferenceValues.push(Number(resolvePrice));
+  }
+  const btcMin = btcReferenceValues.length ? Math.min(...btcReferenceValues) : 0;
+  const btcMax = btcReferenceValues.length ? Math.max(...btcReferenceValues) : 1;
+  const btcPad = btcReferenceValues.length ? Math.max((btcMax - btcMin) * 0.18, btcMax * 0.002) : 0;
+  const btcLower = Math.max(0, btcMin - btcPad);
+  const btcUpper = btcMax + btcPad;
+
+  const xFor = (time) => padding.left + ((time - minTime) / (maxTime - minTime)) * innerWidth;
+  const yForMarket = (value) => padding.top + innerHeight - ((value - marketLower) / ((marketUpper - marketLower) || 1)) * innerHeight;
+  const yForBtc = (value) => padding.top + innerHeight - ((value - btcLower) / ((btcUpper - btcLower) || 1)) * innerHeight;
+
+  const buildPath = (points, yFor) => points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${xFor(point.time).toFixed(2)} ${yFor(point.value).toFixed(2)}`)
+    .join(' ');
+
+  const buildArea = (points) => {
+    if (points.length < 2) {
+      return '';
+    }
+
+    const top = points
+      .map((point, index) => `${index === 0 ? 'M' : 'L'} ${xFor(point.time).toFixed(2)} ${yForMarket(point.value).toFixed(2)}`)
+      .join(' ');
+    return `${top} L ${xFor(points[points.length - 1].time).toFixed(2)} ${(padding.top + innerHeight).toFixed(2)} L ${xFor(points[0].time).toFixed(2)} ${(padding.top + innerHeight).toFixed(2)} Z`;
+  };
+
+  const marketPath = buildPath(boundedMarketPoints, yForMarket);
+  const marketArea = buildArea(boundedMarketPoints);
+  const theoreticalPath = buildPath(theoreticalPoints, yForMarket);
+  const btcPath = buildPath(btcPoints, yForBtc);
+  const selectedTime = (() => {
+    const parsed = new Date(selectedTimestamp || '').getTime();
+    return Number.isNaN(parsed) ? maxTime : parsed;
+  })();
+  const selectedX = xFor(Math.max(minTime, Math.min(maxTime, selectedTime)));
+  const selectedMarketPoint = boundedMarketPoints.length
+    ? boundedMarketPoints.reduce((closest, point) => (Math.abs(point.time - selectedTime) < Math.abs(closest.time - selectedTime) ? point : closest), boundedMarketPoints[0])
+    : null;
+  const selectedTheoreticalPoint = theoreticalPoints.length
+    ? theoreticalPoints.reduce((closest, point) => (Math.abs(point.time - selectedTime) < Math.abs(closest.time - selectedTime) ? point : closest), theoreticalPoints[0])
+    : null;
+  const selectedBtcPoint = btcPoints.length
+    ? btcPoints.reduce((closest, point) => (Math.abs(point.time - selectedTime) < Math.abs(closest.time - selectedTime) ? point : closest), btcPoints[0])
+    : null;
+  const axisSteps = [0, 0.5, 1];
+
   return (
-    <svg width="100%" height={height} preserveAspectRatio="none" viewBox={"0 0 " + W + " " + H} style={{ overflow: "visible" }}>
+    <svg width="100%" height="300" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ overflow: 'visible' }}>
       <defs>
-        <linearGradient id="midGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={C.accent} stopOpacity="0.12" />
-          <stop offset="100%" stopColor={C.accent} stopOpacity="0" />
+        <linearGradient id="midAreaGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={toneColor} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={toneColor} stopOpacity="0" />
         </linearGradient>
       </defs>
-      {[10, 30, 50, 70, 90].map(y => <line key={y} x1="10" y1={y} x2="390" y2={y} stroke={C.border} strokeWidth="0.4" />)}
-      <line x1="10" y1={n(0.5)} x2="390" y2={n(0.5)} stroke={C.muted} strokeWidth="0.6" strokeDasharray="3 3" />
-      <polygon points={pts(midPrice) + " 390," + H + " 10," + H} fill="url(#midGrad)" />
-      <polyline points={pts(btcStrike)}    fill="none" stroke={C.amber} strokeWidth="1.2" strokeDasharray="3 2" strokeLinejoin="round" />
-      <polyline points={pts(theoretical)}  fill="none" stroke={C.blue}  strokeWidth="1.4" strokeDasharray="5 2" strokeLinejoin="round" />
-      <polyline points={pts(midPrice)}     fill="none" stroke={C.accent} strokeWidth="2"  strokeLinejoin="round" />
-      <circle cx="390" cy={n(midPrice[midPrice.length-1])}     r="3"   fill={C.accent} />
-      <circle cx="390" cy={n(theoretical[theoretical.length-1])} r="2.5" fill={C.blue} />
-      <circle cx="390" cy={n(btcStrike[btcStrike.length-1])}   r="2.5" fill={C.amber} />
-    </svg>
-  );
-};
 
-// ─── Depth bar chart: time-windowed, bid/ask bars across 0–1 price axis ───────
-const DepthBarChart = ({ bids, asks, midPrice, height = 160 }) => {
-  const allSizes = [...bids.map(b => b.size), ...asks.map(a => a.size)];
-  const maxSize  = Math.max(...allSizes, 1);
-  const W = 400, H = 100;
-  const barW = 10;
-  const xPos = p => p * W;
-  return (
-    <svg width="100%" height={height} preserveAspectRatio="none" viewBox={"0 0 " + W + " " + H} style={{ overflow: "visible" }}>
-      {[0, 25, 50, 75, 100].map(y => <line key={y} x1="0" y1={y} x2={W} y2={y} stroke={C.border} strokeWidth="0.4" />)}
-      <line x1={xPos(midPrice)} y1="0" x2={xPos(midPrice)} y2={H} stroke={C.muted} strokeWidth="0.8" strokeDasharray="3 2" />
-      <text x={xPos(midPrice) + 2} y="8" fontSize="5" fill={C.muted} fontFamily="JetBrains Mono">mid</text>
-      {bids.map((b, i) => {
-        const bH = (b.size / maxSize) * 80;
-        return <rect key={"b"+i} x={xPos(b.price) - barW/2} y={H - bH} width={barW} height={bH} fill={C.blue} opacity="0.75" />;
-      })}
-      {asks.map((a, i) => {
-        const bH = (a.size / maxSize) * 80;
-        return <rect key={"a"+i} x={xPos(a.price) - barW/2} y={H - bH} width={barW} height={bH} fill={C.red} opacity="0.75" />;
-      })}
-      {[0.0, 0.25, 0.5, 0.75, 1.0].map(p => (
-        <text key={p} x={xPos(p)} y={H + 8} fontSize="5" fill={C.muted} fontFamily="JetBrains Mono" textAnchor="middle">{p.toFixed(2)}</text>
-      ))}
-    </svg>
-  );
-};
-
-// ─── Heatmap: UP vs DN rows, time slots as columns ───────────────────────────
-const HeatmapChart = ({ data, upColor, dnColor, upLabel = 'UP', dnLabel = 'DN', height = 120 }) => {
-  upColor = upColor || C.accent;
-  dnColor = dnColor || C.red;
-  const W = 400, H = 100, cellH = 36, pad = 2;
-  const cols = data.length;
-  const cellW = (W - 24) / cols;
-  const hex2 = v => Math.round(v * 200 + 30).toString(16).padStart(2, '0');
-  return (
-    <svg width="100%" height={height} viewBox={"0 0 " + W + " " + H} style={{ overflow: "visible" }}>
-      <text x="0" y={cellH/2+3}           fontSize="7" fill={upColor} fontFamily="JetBrains Mono" fontWeight="700">{upLabel}</text>
-      <text x="0" y={cellH+pad+cellH/2+3} fontSize="7" fill={dnColor} fontFamily="JetBrains Mono" fontWeight="700">{dnLabel}</text>
-      {data.map((d, i) => {
-        const x = i * cellW + 24;
+      {axisSteps.map((step) => {
+        const y = padding.top + innerHeight * step;
         return (
-          <g key={i}>
-            <rect x={x+pad} y={0}          width={cellW-pad*2} height={cellH-pad} rx="1" fill={upColor + hex2(d.up)} />
-            <text x={x+cellW/2+pad} y={cellH/2+3}           fontSize="5.5" fill={C.white} fontFamily="JetBrains Mono" textAnchor="middle">{d.up.toFixed(2)}</text>
-            <rect x={x+pad} y={cellH+pad}  width={cellW-pad*2} height={cellH-pad} rx="1" fill={dnColor + hex2(d.dn)} />
-            <text x={x+cellW/2+pad} y={cellH+pad+cellH/2+3}  fontSize="5.5" fill={C.white} fontFamily="JetBrains Mono" textAnchor="middle">{d.dn.toFixed(2)}</text>
-            <text x={x+cellW/2+pad} y={H-1} fontSize="5" fill={C.muted} fontFamily="JetBrains Mono" textAnchor="middle">{d.slot}</text>
+          <line
+            key={`grid-${step}`}
+            x1={padding.left}
+            x2={width - padding.right}
+            y1={y}
+            y2={y}
+            stroke="rgba(255,255,255,0.08)"
+            strokeWidth="1"
+          />
+        );
+      })}
+
+      {marketArea ? <path d={marketArea} fill="url(#midAreaGradient)" /> : null}
+      {marketPath ? (
+        <path
+          d={marketPath}
+          fill="none"
+          stroke={toneColor}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
+
+      {theoreticalPath ? (
+        <path
+          d={theoreticalPath}
+          fill="none"
+          stroke={THEME.ice}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray="8 6"
+        />
+      ) : null}
+
+      {btcPath ? (
+        <path
+          d={btcPath}
+          fill="none"
+          stroke={THEME.sun}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray="0"
+        />
+      ) : null}
+
+      {strikePrice !== null && strikePrice !== undefined && Number.isFinite(Number(strikePrice)) ? (
+        <>
+          <line
+            x1={padding.left}
+            x2={width - padding.right}
+            y1={yForBtc(Number(strikePrice))}
+            y2={yForBtc(Number(strikePrice))}
+            stroke={THEME.sun}
+            strokeOpacity="0.8"
+            strokeWidth="1.2"
+            strokeDasharray="7 6"
+          />
+          <text
+            x={width - padding.right + 8}
+            y={yForBtc(Number(strikePrice)) - 6}
+            fill={THEME.sun}
+            fontSize="11"
+            fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace"
+          >
+            Strike {formatUsdCompact(strikePrice)}
+          </text>
+        </>
+      ) : null}
+
+      {resolvePrice !== null && resolvePrice !== undefined && Number.isFinite(Number(resolvePrice)) ? (
+        <>
+          <line
+            x1={padding.left}
+            x2={width - padding.right}
+            y1={yForBtc(Number(resolvePrice))}
+            y2={yForBtc(Number(resolvePrice))}
+            stroke={THEME.violet}
+            strokeOpacity="0.95"
+            strokeWidth="1.2"
+            strokeDasharray="3 6"
+          />
+          <text
+            x={width - padding.right + 8}
+            y={yForBtc(Number(resolvePrice)) + 14}
+            fill={THEME.violet}
+            fontSize="11"
+            fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace"
+          >
+            Resolve {formatUsdCompact(resolvePrice)}
+          </text>
+        </>
+      ) : null}
+
+      <line
+        x1={selectedX}
+        x2={selectedX}
+        y1={padding.top}
+        y2={padding.top + innerHeight}
+        stroke="rgba(255,255,255,0.22)"
+        strokeDasharray="4 5"
+      />
+
+      {selectedMarketPoint ? (
+        <circle
+          cx={xFor(selectedMarketPoint.time)}
+          cy={yForMarket(selectedMarketPoint.value)}
+          r="5.6"
+          fill={toneColor}
+          stroke="rgba(6,17,23,0.9)"
+          strokeWidth="2"
+        />
+      ) : null}
+
+      {selectedTheoreticalPoint ? (
+        <circle
+          cx={xFor(selectedTheoreticalPoint.time)}
+          cy={yForMarket(selectedTheoreticalPoint.value)}
+          r="4.6"
+          fill={THEME.ice}
+          stroke="rgba(6,17,23,0.9)"
+          strokeWidth="2"
+        />
+      ) : null}
+
+      {selectedBtcPoint ? (
+        <circle
+          cx={xFor(selectedBtcPoint.time)}
+          cy={yForBtc(selectedBtcPoint.value)}
+          r="4.6"
+          fill={THEME.sun}
+          stroke="rgba(6,17,23,0.9)"
+          strokeWidth="2"
+        />
+      ) : null}
+
+      {[0, 1, 2].map((index) => {
+        const fraction = index / 2;
+        const y = padding.top + innerHeight - fraction * innerHeight;
+        const marketValue = marketLower + (marketUpper - marketLower) * fraction;
+        const btcValue = btcLower + (btcUpper - btcLower) * fraction;
+
+        return (
+          <g key={`axis-${index}`}>
+            <text
+              x={padding.left - 10}
+              y={y + 4}
+              fill={THEME.muted}
+              fontSize="11"
+              textAnchor="end"
+              fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace"
+            >
+              {formatContractPrice(marketValue)}
+            </text>
+            <text
+              x={width - padding.right + 10}
+              y={y + 4}
+              fill={THEME.muted}
+              fontSize="11"
+              textAnchor="start"
+              fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace"
+            >
+              {formatUsdCompact(btcValue)}
+            </text>
           </g>
         );
       })}
+
+      <text
+        x={padding.left}
+        y={height - 8}
+        fill={THEME.muted}
+        fontSize="11"
+        fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace"
+      >
+        {formatWindowTimestamp(new Date(minTime).toISOString())}
+      </text>
+      <text
+        x={width - padding.right}
+        y={height - 8}
+        fill={THEME.muted}
+        fontSize="11"
+        textAnchor="end"
+        fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace"
+      >
+        {formatWindowTimestamp(new Date(maxTime).toISOString())}
+      </text>
     </svg>
   );
 };
 
-// ─── Data helpers ─────────────────────────────────────────────────────────────
-const clamp  = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const rng    = (lo, hi) => lo + Math.random() * (hi - lo);
-
-const genPriceSeries = (len, base, vol) =>
-  Array.from({ length: len }, () => {
-    base = clamp(base + (Math.random() - 0.5) * vol, 0.01, 0.99);
-    return parseFloat(base.toFixed(4));
-  });
-
-const genBtcStrike = (len) =>
-  Array.from({ length: len }, (_, i) => parseFloat((0.25 + i * 0.001).toFixed(4)));
-
-// Generate order book for a given time slot index (simulates time-windowed snapshot)
-const genOrderBook = (midP, slotSeed) => {
-  const bids = [], asks = [];
-  for (let i = 1; i <= 10; i++) {
-    bids.push({ price: parseFloat(clamp(midP - i*0.025, 0.01, 0.98).toFixed(3)), size: rng(100, 1000) * (1 + slotSeed * 0.1) });
-  }
-  for (let i = 1; i <= 10; i++) {
-    asks.push({ price: parseFloat(clamp(midP + i*0.025, 0.02, 0.99).toFixed(3)), size: rng(100, 1000) * (1 + slotSeed * 0.1) });
-  }
-  return { bids, asks };
-};
-
-// 15-min time slots
-const TIME_SLOTS = ['00:00','00:15','00:30','00:45','01:00','01:15','01:30','01:45','02:00','02:15','02:30','02:45'];
-
-const genHeatmap = () =>
-  TIME_SLOTS.map(slot => {
-    const strike = parseFloat(rng(0.20, 0.35).toFixed(3));
-    const theo   = parseFloat(rng(0.18, 0.38).toFixed(3));
-    return {
-      slot,
-      up:          parseFloat(rng(0.15, 0.75).toFixed(3)),
-      dn:          parseFloat(rng(0.15, 0.75).toFixed(3)),
-      btcStrikeUp: strike,
-      btcStrikeDn: parseFloat((1 - strike).toFixed(3)),
-      theoUp:      theo,
-      theoDn:      parseFloat((1 - theo).toFixed(3)),
-    };
-  });
-
-const advanceSeries = (arr, vol) => {
-  const next = clamp(arr[arr.length-1] + (Math.random()-0.5)*vol, 0.01, 0.99);
-  return arr.slice(1).concat(parseFloat(next.toFixed(4)));
-};
-
-// ─── Available datetime periods (replace with real data from backend) ───────────
-const PERIOD_OPTIONS = [
-  '12/10/2022 00:00', '12/10/2022 00:15', '12/10/2022 00:30', '12/10/2022 00:45',
-  '12/10/2022 01:00', '12/10/2022 01:15', '12/10/2022 01:30', '12/10/2022 01:45',
-  '12/10/2022 02:00', '12/10/2022 02:15', '12/10/2022 02:30', '12/10/2022 02:45',
-  '12/11/2022 00:00', '12/11/2022 00:15', '12/11/2022 00:30', '12/11/2022 00:45',
-  '12/11/2022 01:00', '12/11/2022 01:15', '12/11/2022 01:30', '12/11/2022 01:45',
-  '12/12/2022 00:00', '12/12/2022 00:15', '12/12/2022 00:30', '12/12/2022 00:45',
-];
-
-// ─── Main component ───────────────────────────────────────────────────────────
-const TerminalScreen = () => {
-  const [userName, setUserName]       = useState("Trader");
-  const [activeMarket, setActiveMarket] = useState("BTC-15M-UP");
-
-  // Price chart: 15-min datetime range
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate]     = useState("");
-
-  // Depth chart: selected time slot index
-  const [depthSlot, setDepthSlot] = useState(0);
-
-  // Left panel: shared datetime period for both UP and DN
-  const [selectedPeriod, setSelectedPeriod] = useState('12/10/2022 00:00');
-
-  // Heatmap: which dataset to show
-  const [hmStrikeMode, setHmStrikeMode] = useState('strike');  // 'strike' | 'theoretical'
-  const [hmTheoMode,   setHmTheoMode]   = useState('theoretical');
-
-  const N = 48;
-
-  const freshData = () => {
-    const mid = 0.25 + Math.random() * 0.15;
-    return {
-      midPrice:    genPriceSeries(N, mid, 0.015),
-      theoretical: genPriceSeries(N, mid + 0.02, 0.012),
-      btcStrike:   genBtcStrike(N),
-      // one order book snapshot per time slot
-      depthBySlot: TIME_SLOTS.map((_, si) => genOrderBook(mid + (si-6)*0.003, si)),
-      heatmap:     genHeatmap(),
-      spread:      parseFloat(rng(1.5, 4.5).toFixed(2)),
-      vol:         parseFloat(rng(28, 55).toFixed(1)),
-      vpin:        parseFloat(rng(0.28, 0.72).toFixed(3)),
-    };
-  };
-
-  const [mkt, setMkt] = useState(freshData);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('ob_user_name');
-    if (saved) setUserName(saved);
-  }, []);
-
-  // Stream price series every 3s
-  useEffect(() => {
-    const t = setInterval(() => {
-      setMkt(prev => {
-        const newMid  = advanceSeries(prev.midPrice, 0.015);
-        const newTheo = advanceSeries(prev.theoretical, 0.012);
-        const mid = newMid[N-1];
-        return {
-          ...prev,
-          midPrice:    newMid,
-          theoretical: newTheo,
-          depthBySlot: prev.depthBySlot.map((_, si) => genOrderBook(mid + (si-6)*0.003, si)),
-          spread: parseFloat((Math.abs(newMid[N-1] - newTheo[N-1]) * 100 + 1.5).toFixed(2)),
-          vpin:   clamp(prev.vpin + (Math.random()-0.5)*0.03, 0.1, 0.95),
-        };
-      });
-    }, 3000);
-    return () => clearInterval(t);
-  }, []);
-
-  // Refresh heatmap every 15s
-  useEffect(() => {
-    const t = setInterval(() => setMkt(prev => ({ ...prev, heatmap: genHeatmap() })), 15000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => { setMkt(freshData()); }, [activeMarket, selectedPeriod]);
-
-  // L2 order book (right panel, real-time)
-  const l2Book = useMemo(() => {
-    const mid = mkt.midPrice[N-1];
-    const btcMid = 67420 + (mid - 0.25) * 1000;
-    const gen = (base, count, isAsk) =>
-      Array.from({ length: count }).map((_, i) => ({
-        price: isAsk ? base + i*0.5 : base - i*0.5,
-        size:  (Math.random()*2+0.1).toFixed(3),
-        total: (Math.random()*10+5).toFixed(1),
-        depthPct: Math.floor(Math.random()*80)+5
-      }));
-    return { btcMid, asks: gen(btcMid+0.5, 8, true).reverse(), bids: gen(btcMid-0.5, 8, false) };
-  }, [Math.floor(mkt.midPrice[N-1] * 1000)]);
-
-  const mid = mkt.midPrice[N-1];
-  const vpinAlert = mkt.vpin >= 0.7;
-  const currentDepth = mkt.depthBySlot[depthSlot] || mkt.depthBySlot[0];
-
-  const contracts = ['BTC-15M-UP', 'BTC-15M-DN'];
-
-  const TabToggle = ({ options, value, onChange }) => (
-    <div style={{ display: "flex", gap: 2, background: C.bg, padding: 3, borderRadius: 6, border: "1px solid " + C.border }}>
-      {options.map(o => (
-        <button key={o.id} onClick={() => onChange(o.id)}
-          style={{ background: value === o.id ? C.surface : "transparent", color: value === o.id ? C.white : C.muted, border: "none", borderRadius: 4, padding: "4px 10px", fontSize: 9, cursor: "pointer", fontWeight: 600, fontFamily: "'JetBrains Mono'", transition: "0.15s" }}>
-          {o.label}
-        </button>
-      ))}
-    </div>
+const OrderBookSpreadChart = ({ bids, asks }) => {
+  const width = 920;
+  const height = 220;
+  const padding = { top: 18, right: 24, bottom: 54, left: 24 };
+  const innerHeight = height - padding.top - padding.bottom;
+  const centerX = width / 2;
+  const centerGap = 78;
+  const orderedBids = [...bids].slice(0, 5);
+  const orderedAsks = [...asks].slice(0, 5);
+  const maxLevels = Math.max(orderedBids.length, orderedAsks.length, 1);
+  const columnWidth = Math.min(52, Math.max(30, ((width / 2) - centerGap - 40) / maxLevels - 14));
+  const spacing = 14;
+  const maxSize = Math.max(
+    ...orderedBids.map((level) => Number(level.size) || 0),
+    ...orderedAsks.map((level) => Number(level.size) || 0),
+    1
   );
+  const bestBid = orderedBids[0] || null;
+  const bestAsk = orderedAsks[0] || null;
+  const spreadLabel = (bestBid && bestAsk)
+    ? formatSpread(Number(bestAsk.price) - Number(bestBid.price))
+    : 'n/a';
+
+  const bidX = (index) => centerX - (centerGap / 2) - columnWidth - index * (columnWidth + spacing);
+  const askX = (index) => centerX + (centerGap / 2) + index * (columnWidth + spacing);
+  const barHeight = (size) => ((Number(size) || 0) / maxSize) * Math.max(innerHeight - 28, 96);
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: C.bg, color: C.white, fontFamily: "'JetBrains Mono'" }}>
+    <svg width="100%" height="220" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+      {[0, 0.33, 0.66, 1].map((step) => {
+        const y = padding.top + innerHeight * step;
+        return (
+          <line
+            key={`depth-grid-${step}`}
+            x1={padding.left}
+            x2={width - padding.right}
+            y1={y}
+            y2={y}
+            stroke="rgba(255,255,255,0.07)"
+            strokeWidth="1"
+          />
+        );
+      })}
 
-      {/* Nav */}
-      <nav style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 24px", background: C.surface, borderBottom: "1px solid " + C.border, flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <Logo size={12} />
-          <div style={{ width: 1, height: 16, background: C.border }} />
-          <div style={{ fontSize: 11, color: C.accent }}>● LIVE FEED</div>
-          <div style={{ fontSize: 11, color: C.muted }}>BTC 15-MIN PREDICTION MARKET</div>
+      <rect
+        x={centerX - centerGap / 2}
+        y={padding.top}
+        width={centerGap}
+        height={innerHeight}
+        rx="18"
+        fill="rgba(255,255,255,0.03)"
+        stroke="rgba(255,255,255,0.05)"
+      />
+      <text
+        x={centerX}
+        y={padding.top + 58}
+        textAnchor="middle"
+        fill={THEME.muted}
+        fontSize="11"
+        fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace"
+      >
+        Spread
+      </text>
+      <text
+        x={centerX}
+        y={padding.top + 82}
+        textAnchor="middle"
+        fill={THEME.ink}
+        fontSize="18"
+        fontFamily="'Space Grotesk', 'DM Sans', sans-serif"
+      >
+        {spreadLabel}
+      </text>
+
+      {orderedBids.map((level, index) => {
+        const h = barHeight(level.size);
+        const x = bidX(index);
+        const y = padding.top + innerHeight - h;
+        return (
+          <g key={`bid-bar-${index}`}>
+            <rect x={x} y={y} width={columnWidth} height={h} rx="14" fill="rgba(42, 215, 156, 0.88)" />
+            <text x={x + columnWidth / 2} y={y - 8} textAnchor="middle" fill={THEME.up} fontSize="11" fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace">
+              {formatCompactNumber(level.size, 1)}
+            </text>
+            <text x={x + columnWidth / 2} y={height - 30} textAnchor="middle" fill={THEME.muted} fontSize="10" fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace">
+              L{index + 1}
+            </text>
+            <text x={x + columnWidth / 2} y={height - 14} textAnchor="middle" fill={THEME.ink} fontSize="11" fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace">
+              {formatContractPrice(level.price, 2)}
+            </text>
+          </g>
+        );
+      })}
+
+      {orderedAsks.map((level, index) => {
+        const h = barHeight(level.size);
+        const x = askX(index);
+        const y = padding.top + innerHeight - h;
+        return (
+          <g key={`ask-bar-${index}`}>
+            <rect x={x} y={y} width={columnWidth} height={h} rx="14" fill="rgba(255, 134, 107, 0.88)" />
+            <text x={x + columnWidth / 2} y={y - 8} textAnchor="middle" fill={THEME.down} fontSize="11" fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace">
+              {formatCompactNumber(level.size, 1)}
+            </text>
+            <text x={x + columnWidth / 2} y={height - 30} textAnchor="middle" fill={THEME.muted} fontSize="10" fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace">
+              L{index + 1}
+            </text>
+            <text x={x + columnWidth / 2} y={height - 14} textAnchor="middle" fill={THEME.ink} fontSize="11" fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace">
+              {formatContractPrice(level.price, 2)}
+            </text>
+          </g>
+        );
+      })}
+
+      {bestBid ? (
+        <text x={centerX - centerGap / 2 - 10} y={padding.top + innerHeight + 26} textAnchor="end" fill={THEME.up} fontSize="11" fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace">
+          Best bid {formatContractPrice(bestBid.price, 2)}
+        </text>
+      ) : null}
+      {bestAsk ? (
+        <text x={centerX + centerGap / 2 + 10} y={padding.top + innerHeight + 26} textAnchor="start" fill={THEME.down} fontSize="11" fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace">
+          Best ask {formatContractPrice(bestAsk.price, 2)}
+        </text>
+      ) : null}
+    </svg>
+  );
+};
+
+const ImbalanceHistoryChart = ({ series, marketWindow, selectedTimestamp }) => {
+  const timeDomain = marketWindow || getMidPriceTimeDomain(series);
+  const points = series
+    .map((point) => ({
+      time: new Date(point.timestamp).getTime(),
+      value: point.imbalance === null || point.imbalance === undefined ? null : Number(point.imbalance),
+    }))
+    .filter((point) => !Number.isNaN(point.time) && Number.isFinite(point.value))
+    .filter((point) => isWithinTimeDomain(point.time, timeDomain));
+
+  if (!timeDomain || !points.length) {
+    return (
+      <EmptyState
+        title="No imbalance history"
+        message="Imbalance history will render once the market service returns chartable market snapshots for this session."
+        height={120}
+      />
+    );
+  }
+
+  const width = 920;
+  const height = 126;
+  const padding = { top: 14, right: 16, bottom: 24, left: 40 };
+  const innerWidth = width - padding.left - padding.right;
+  const innerHeight = height - padding.top - padding.bottom;
+  const minTime = timeDomain.start;
+  const maxTime = timeDomain.plotEnd;
+  const xFor = (time) => padding.left + ((time - minTime) / (maxTime - minTime)) * innerWidth;
+  const yFor = (value) => padding.top + innerHeight - ((value + 1) / 2) * innerHeight;
+  const path = points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${xFor(point.time).toFixed(2)} ${yFor(point.value).toFixed(2)}`)
+    .join(' ');
+  const selectedTime = (() => {
+    const parsed = new Date(selectedTimestamp || '').getTime();
+    return Number.isNaN(parsed) ? maxTime : parsed;
+  })();
+  const selectedX = xFor(Math.max(minTime, Math.min(maxTime, selectedTime)));
+  const selectedPoint = points.reduce(
+    (closest, point) => (Math.abs(point.time - selectedTime) < Math.abs(closest.time - selectedTime) ? point : closest),
+    points[0]
+  );
+  const selectedColor = selectedPoint.value >= 0 ? THEME.up : THEME.down;
+
+  return (
+    <svg width="100%" height="126" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+      <rect
+        x={padding.left}
+        y={padding.top}
+        width={innerWidth}
+        height={innerHeight / 2}
+        fill="rgba(42, 215, 156, 0.06)"
+      />
+      <rect
+        x={padding.left}
+        y={padding.top + innerHeight / 2}
+        width={innerWidth}
+        height={innerHeight / 2}
+        fill="rgba(255, 134, 107, 0.05)"
+      />
+
+      {[-1, -0.5, 0, 0.5, 1].map((value) => (
+        <line
+          key={`imbalance-grid-${value}`}
+          x1={padding.left}
+          x2={width - padding.right}
+          y1={yFor(value)}
+          y2={yFor(value)}
+          stroke={value === 0 ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.07)'}
+          strokeDasharray={value === 0 ? '0' : '3 6'}
+        />
+      ))}
+
+      <path
+        d={path}
+        fill="none"
+        stroke={THEME.ice}
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      <line
+        x1={selectedX}
+        x2={selectedX}
+        y1={padding.top}
+        y2={padding.top + innerHeight}
+        stroke="rgba(255,255,255,0.22)"
+        strokeDasharray="4 5"
+      />
+      <circle
+        cx={xFor(selectedPoint.time)}
+        cy={yFor(selectedPoint.value)}
+        r="4.6"
+        fill={selectedColor}
+        stroke="rgba(6,17,23,0.88)"
+        strokeWidth="2"
+      />
+
+      {[1, 0, -1].map((value) => (
+        <text
+          key={`imbalance-axis-${value}`}
+          x={padding.left - 8}
+          y={yFor(value) + 4}
+          textAnchor="end"
+          fill={THEME.muted}
+          fontSize="10"
+          fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace"
+        >
+          {value > 0 ? '+100%' : value < 0 ? '-100%' : '0%'}
+        </text>
+      ))}
+
+      <text
+        x={padding.left}
+        y={height - 6}
+        fill={THEME.muted}
+        fontSize="10"
+        fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace"
+      >
+        {formatWindowTimestamp(new Date(minTime).toISOString())}
+      </text>
+      <text
+        x={width - padding.right}
+        y={height - 6}
+        textAnchor="end"
+        fill={THEME.muted}
+        fontSize="10"
+        fontFamily="'IBM Plex Mono', 'JetBrains Mono', monospace"
+      >
+        {formatWindowTimestamp(new Date(maxTime).toISOString())}
+      </text>
+    </svg>
+  );
+};
+
+const ImbalanceSnapshotPanel = ({ snapshot }) => {
+  const bids = Array.isArray(snapshot?.bids) ? snapshot.bids.filter((level) => level?.price !== null || level?.size !== null) : [];
+  const asks = Array.isArray(snapshot?.asks) ? snapshot.asks.filter((level) => level?.price !== null || level?.size !== null) : [];
+  const imbalancePct = (snapshot?.imbalance ?? null) === null ? null : Number(snapshot.imbalance) * 100;
+
+  return (
+    <div className="depth-visual">
+      <div className="imbalance-shell">
+        <div className="imbalance-header">
+          <div>
+            <div className="eyebrow">Snapshot Pressure</div>
+            <div className="panel-copy">
+              The selected scrubber point drives these pressure and flow readings for the same market timestamp.
+            </div>
+          </div>
+          <Tag color={(Number(snapshot?.imbalance) || 0) >= 0 ? THEME.up : THEME.down}>
+            {formatSignedPercent(imbalancePct, 1)}
+          </Tag>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ fontSize: 11, textAlign: "right" }}>
-            <div style={{ color: C.muted }}>LATENCY</div>
-            <div style={{ color: C.accent }}>1.42ms</div>
-          </div>
-          <Btn variant="ghost" onClick={() => window.location.href = 'menu.html'}>EXIT</Btn>
-          <div style={{ padding: "4px 10px", background: C.bg, borderRadius: 4, border: "1px solid " + C.border, fontSize: 11 }}>ID: {userName.toUpperCase()}</div>
+
+        <div className="depth-summary">
+          <div className="depth-pill">Bid stack {formatCompactNumber(snapshot?.totalBidSize, 2)}</div>
+          <div className="depth-pill">Ask stack {formatCompactNumber(snapshot?.totalAskSize, 2)}</div>
+          <div className="depth-pill">Buy flow {formatCompactNumber(snapshot?.buySize, 2)}</div>
+          <div className="depth-pill">Sell flow {formatCompactNumber(snapshot?.sellSize, 2)}</div>
         </div>
-      </nav>
-
-      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "200px 1fr 280px", gap: 1, background: C.border, overflow: "hidden" }}>
-
-        {/* Left — contracts + time range selector + KPIs + execute */}
-        <aside style={{ background: C.bg, display: "flex", flexDirection: "column", gap: 0, overflowY: "auto" }}>
-
-          {/* Contract selector */}
-          <div style={{ padding: 14, borderBottom: "1px solid " + C.border }}>
-            <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 10 }}>BTC 15-MIN CONTRACTS</div>
-
-            {/* Shared datetime period selector */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-              <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 2 }}>SELECT PERIOD</div>
-              <select
-                value={selectedPeriod}
-                onChange={e => setSelectedPeriod(e.target.value)}
-                style={{ width: "100%", background: C.surface, border: "1px solid " + C.accent + "60", color: C.white, borderRadius: 6, padding: "7px 8px", fontSize: 10, outline: "none", fontFamily: "'JetBrains Mono'", cursor: "pointer" }}
-              >
-                {PERIOD_OPTIONS.map(p => (
-                  <option key={p} value={p} style={{ background: C.surface, color: C.white }}>{p}</option>
-                ))}
-              </select>
-              <div style={{ fontSize: 8, color: C.accent, textAlign: "right", marginTop: 1 }}>
-                {selectedPeriod}
-              </div>
-            </div>
-
-            {/* UP / DN buttons */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {contracts.map(m => {
-                const isUp = m.includes('UP');
-                const col = isUp ? C.accent : C.red;
-                return (
-                  <div key={m} onClick={() => setActiveMarket(m)}
-                    style={{ padding: 10, borderRadius: 6, border: "1px solid " + (activeMarket === m ? col : 'transparent'), background: activeMarket === m ? col + "12" : C.surface, cursor: "pointer", transition: "0.2s" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <span style={{ fontSize: 11, fontWeight: 700 }}>{m}</span>
-                      <span style={{ fontSize: 9, color: col, background: col + "20", padding: "1px 5px", borderRadius: 3 }}>{isUp ? 'UP' : 'DN'}</span>
-                    </div>
-                    <div style={{ fontSize: 13, color: col, fontWeight: 700 }}>{(isUp ? mid : 1 - mid).toFixed(3)} <span style={{ fontSize: 9, color: C.muted }}>¢</span></div>
-                    <div style={{ fontSize: 8, color: C.muted, marginTop: 2 }}>Vol: $1.2M · 15-min</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* KPIs */}
-          <div style={{ padding: 14, borderBottom: "1px solid " + C.border, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ fontSize: 9, color: C.muted, letterSpacing: 1, marginBottom: 2 }}>MARKET METRICS</div>
-            {[
-              { label: "MID PRICE",        val: mid.toFixed(4),          color: C.accent },
-              { label: "THEORETICAL",      val: mkt.theoretical[N-1].toFixed(4), color: C.blue },
-              { label: "BTC STRIKE",       val: mkt.btcStrike[N-1].toFixed(4),   color: C.amber },
-              { label: "SPREAD (BPS)",     val: mkt.spread,              color: C.white },
-              { label: "REALIZED VOL",     val: mkt.vol + "%",           color: C.purple },
-              { label: "VPIN",             val: mkt.vpin.toFixed(3),     color: vpinAlert ? C.red : C.amber },
-            ].map(k => (
-              <div key={k.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: 8, color: C.muted }}>{k.label}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: k.color }}>{k.val}</span>
-              </div>
-            ))}
-            {vpinAlert && <div style={{ fontSize: 8, color: C.red, background: C.red + "15", padding: "4px 8px", borderRadius: 4, textAlign: "center" }}>⚠ VPIN ELEVATED</div>}
-          </div>
-
-        </aside>
-
-        {/* Center — all charts stacked vertically */}
-        <main style={{ background: C.bg, overflowY: "auto", padding: "16px 20px", display: "flex", flexDirection: "column", gap: 24 }}>
-
-          {/* ── 1. Price Chart ── */}
-          <div style={{ background: C.surface, border: "1px solid " + C.border, borderRadius: 12, padding: "16px 18px" }}>
-            <SectionHeader
-              title="PRICE CHART · BTC 15-MIN"
-              sub={"Mid Price vs Theoretical vs BTC Strike · " + activeMarket + " · " + selectedPeriod}
-              controls={
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ fontSize: 9, color: C.muted }}>WINDOW:</span>
-                  <input type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)}
-                    style={{ background: C.bg, color: C.text, border: "1px solid " + C.border, borderRadius: 4, padding: "3px 6px", fontSize: 9, outline: "none", fontFamily: "'JetBrains Mono'" }} />
-                  <span style={{ color: C.muted, fontSize: 9 }}>–</span>
-                  <input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)}
-                    style={{ background: C.bg, color: C.text, border: "1px solid " + C.border, borderRadius: 4, padding: "3px 6px", fontSize: 9, outline: "none", fontFamily: "'JetBrains Mono'" }} />
-                </div>
-              }
-            />
-            <div style={{ display: "flex", gap: 16, fontSize: 9, marginBottom: 10 }}>
-              <span style={{ color: C.accent }}>— Mid Price</span>
-              <span style={{ color: C.blue }}>- - Theoretical</span>
-              <span style={{ color: C.amber }}>-- BTC Strike</span>
-              <span style={{ color: C.muted }}>· · 0.5 ref</span>
-            </div>
-            <PriceLineChart midPrice={mkt.midPrice} theoretical={mkt.theoretical} btcStrike={mkt.btcStrike} height={200} />
-          </div>
-
-          {/* ── 2. Depth Chart ── */}
-          <div style={{ background: C.surface, border: "1px solid " + C.border, borderRadius: 12, padding: "16px 18px" }}>
-            <SectionHeader
-              title="ORDER BOOK DEPTH · PRICE 0.00 – 1.00"
-              sub={"Snapshot at: " + TIME_SLOTS[depthSlot] + " · " + activeMarket}
-              controls={
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ fontSize: 9, color: C.muted }}>TIME SLOT:</span>
-                  <input type="range" min="0" max={TIME_SLOTS.length - 1} step="1" value={depthSlot}
-                    onChange={e => setDepthSlot(parseInt(e.target.value))}
-                    style={{ width: 120, accentColor: C.accent }} />
-                  <span style={{ fontSize: 10, color: C.accent, minWidth: 40 }}>{TIME_SLOTS[depthSlot]}</span>
-                  <button onClick={() => setDepthSlot(0)}
-                    style={{ background: "transparent", border: "1px solid " + C.border, color: C.muted, borderRadius: 4, padding: "3px 8px", fontSize: 9, cursor: "pointer", fontFamily: "'JetBrains Mono'" }}>
-                    Reset
-                  </button>
-                </div>
-              }
-            />
-            <div style={{ display: "flex", gap: 16, fontSize: 9, marginBottom: 10 }}>
-              <span style={{ color: C.blue }}>█ Bid</span>
-              <span style={{ color: C.red }}>█ Ask</span>
-              <span style={{ color: C.muted }}>| Mid: {mid.toFixed(3)}</span>
-              <span style={{ color: C.muted }}>
-                Bid depth: {currentDepth.bids.reduce((s, b) => s + b.size, 0).toFixed(0)}
-                {" · Ask depth: "}{currentDepth.asks.reduce((s, a) => s + a.size, 0).toFixed(0)}
-              </span>
-            </div>
-            <DepthBarChart bids={currentDepth.bids} asks={currentDepth.asks} midPrice={mid} height={160} />
-          </div>
-
-          {/* ── 3. Heatmap: Strike vs BTC ── */}
-          <div style={{ background: C.surface, border: "1px solid " + C.border, borderRadius: 12, padding: "16px 18px" }}>
-            <SectionHeader
-              title="HEATMAP · STRIKE vs BTC PRICE"
-              sub="BTC Strike UP / DN component by 15-min time slot"
-              controls={
-                <TabToggle
-                  options={[{ id: 'strike', label: 'Strike' }, { id: 'mid', label: 'Mid Price' }]}
-                  value={hmStrikeMode}
-                  onChange={setHmStrikeMode}
-                />
-              }
-            />
-            <div style={{ display: "flex", gap: 16, fontSize: 9, marginBottom: 10 }}>
-              {hmStrikeMode === 'strike' ? (
-                <><span style={{ color: C.accent }}>█ Strike UP</span><span style={{ color: C.red }}>█ Strike DN</span></>
-              ) : (
-                <><span style={{ color: C.accent }}>█ Mid Price UP</span><span style={{ color: C.red }}>█ Mid Price DN</span></>
-              )}
-              <span style={{ color: C.muted }}>· Brighter = higher value</span>
-            </div>
-            <HeatmapChart
-              data={mkt.heatmap.map(d => hmStrikeMode === 'strike'
-                ? { slot: d.slot, up: d.btcStrikeUp, dn: d.btcStrikeDn }
-                : { slot: d.slot, up: d.up, dn: d.dn }
-              )}
-              height={120}
-              upLabel={hmStrikeMode === 'strike' ? 'STRIKE UP' : 'MID UP'}
-              dnLabel={hmStrikeMode === 'strike' ? 'STRIKE DN' : 'MID DN'}
-            />
-          </div>
-
-          {/* ── 4. Heatmap: Theoretical Price ── */}
-          <div style={{ background: C.surface, border: "1px solid " + C.border, borderRadius: 12, padding: "16px 18px" }}>
-            <SectionHeader
-              title="HEATMAP · THEORETICAL PRICE"
-              sub="Theoretical UP / DN token price by 15-min time slot"
-              controls={
-                <TabToggle
-                  options={[{ id: 'theoretical', label: 'Theoretical' }, { id: 'spread', label: 'vs Mid Spread' }]}
-                  value={hmTheoMode}
-                  onChange={setHmTheoMode}
-                />
-              }
-            />
-            <div style={{ display: "flex", gap: 16, fontSize: 9, marginBottom: 10 }}>
-              {hmTheoMode === 'theoretical' ? (
-                <><span style={{ color: C.blue }}>█ Theo UP</span><span style={{ color: C.purple }}>█ Theo DN</span></>
-              ) : (
-                <><span style={{ color: C.blue }}>█ UP spread</span><span style={{ color: C.purple }}>█ DN spread</span></>
-              )}
-              <span style={{ color: C.muted }}>· Brighter = higher value</span>
-            </div>
-            <HeatmapChart
-              data={mkt.heatmap.map(d => hmTheoMode === 'theoretical'
-                ? { slot: d.slot, up: d.theoUp, dn: d.theoDn }
-                : { slot: d.slot, up: Math.abs(d.theoUp - d.up), dn: Math.abs(d.theoDn - d.dn) }
-              )}
-              height={120}
-              upColor={C.blue}
-              dnColor={C.purple}
-              upLabel={hmTheoMode === 'theoretical' ? 'THEO UP' : 'SPREAD UP'}
-              dnLabel={hmTheoMode === 'theoretical' ? 'THEO DN' : 'SPREAD DN'}
-            />
-          </div>
-
-        </main>
-
-        {/* Right — L2 order book */}
-        <aside style={{ background: C.surface, display: "flex", flexDirection: "column", borderLeft: "1px solid " + C.border, overflowY: "auto" }}>
-          <div style={{ padding: 14, flex: 1, display: "flex", flexDirection: "column" }}>
-            <div style={{ fontSize: 10, color: C.muted, marginBottom: 10, letterSpacing: 1 }}>ORDER BOOK (L2)</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", fontSize: 9, color: C.muted, paddingBottom: 6 }}>
-              <span>PRICE</span><span style={{ textAlign: "right" }}>SIZE</span><span style={{ textAlign: "right" }}>TOTAL</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column-reverse" }}>
-              {l2Book.asks.map((a, i) => (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", fontSize: 11, padding: "3px 0", position: "relative" }}>
-                  <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, background: C.red + "15", width: a.depthPct + "%" }} />
-                  <span style={{ color: C.red }}>{a.price.toFixed(1)}</span>
-                  <span style={{ textAlign: "right", zIndex: 1 }}>{a.size}</span>
-                  <span style={{ textAlign: "right", zIndex: 1 }}>{a.total}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ padding: "10px 0", margin: "6px 0", borderTop: "1px solid " + C.border, borderBottom: "1px solid " + C.border, textAlign: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>{l2Book.btcMid.toFixed(2)}</div>
-              <div style={{ fontSize: 9, color: C.muted }}>BTC/USD ORACLE</div>
-            </div>
-            <div>
-              {l2Book.bids.map((b, i) => (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", fontSize: 11, padding: "3px 0", position: "relative" }}>
-                  <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, background: C.accent + "15", width: b.depthPct + "%" }} />
-                  <span style={{ color: C.accent }}>{b.price.toFixed(1)}</span>
-                  <span style={{ textAlign: "right", zIndex: 1 }}>{b.size}</span>
-                  <span style={{ textAlign: "right", zIndex: 1 }}>{b.total}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </aside>
-
       </div>
+
+      <div className="micro-stat-grid is-compact">
+        <div className="micro-stat">
+          <div className="micro-stat-label">Bid stack</div>
+          <div className="micro-stat-value">{formatCompactNumber(snapshot?.totalBidSize, 2)}</div>
+          <div className="micro-stat-sub">{bids.length} displayed levels</div>
+        </div>
+        <div className="micro-stat">
+          <div className="micro-stat-label">Ask stack</div>
+          <div className="micro-stat-value">{formatCompactNumber(snapshot?.totalAskSize, 2)}</div>
+          <div className="micro-stat-sub">{asks.length} displayed levels</div>
+        </div>
+        <div className="micro-stat">
+          <div className="micro-stat-label">Buy size</div>
+          <div className="micro-stat-value" style={{ color: THEME.up }}>{formatCompactNumber(snapshot?.buySize, 2)}</div>
+          <div className="micro-stat-sub">Aggressive buys at this snapshot</div>
+        </div>
+        <div className="micro-stat">
+          <div className="micro-stat-label">Sell size</div>
+          <div className="micro-stat-value" style={{ color: THEME.down }}>{formatCompactNumber(snapshot?.sellSize, 2)}</div>
+          <div className="micro-stat-sub">Aggressive sells at this snapshot</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const OrderBookPanel = ({ snapshot }) => {
+  const bids = Array.isArray(snapshot?.bids) ? snapshot.bids.filter((level) => level?.price !== null || level?.size !== null) : [];
+  const asks = Array.isArray(snapshot?.asks) ? snapshot.asks.filter((level) => level?.price !== null || level?.size !== null) : [];
+  const hasDepth = bids.length || asks.length;
+
+  return (
+    <div className="depth-visual">
+      <div className="depth-summary">
+        <div className="depth-pill">Best bid {formatContractPrice(bids[0]?.price, 2)}</div>
+        <div className="depth-pill">Best ask {formatContractPrice(asks[0]?.price, 2)}</div>
+        <div className="depth-pill">Spread {formatSpread(snapshot?.spread)}</div>
+        <div className="depth-pill">Imbalance {formatSignedPercent((snapshot?.imbalance ?? null) === null ? null : Number(snapshot.imbalance) * 100, 1)}</div>
+      </div>
+
+      <div className="depth-legend">
+        <span className="legend-item" style={{ color: THEME.up }}>
+          <span className="legend-line" />
+          Bids from L1 outward
+        </span>
+        <span className="legend-item" style={{ color: THEME.down }}>
+          <span className="legend-line" />
+          Asks from L1 outward
+        </span>
+      </div>
+
+      {hasDepth ? (
+        <div className="depth-chart-shell">
+          <OrderBookSpreadChart bids={bids} asks={asks} />
+        </div>
+      ) : (
+        <EmptyState
+          title="No order book depth"
+          message="The selected snapshot does not currently expose book levels for this contract."
+          height={220}
+        />
+      )}
+    </div>
+  );
+};
+
+const TerminalScreen = () => {
+  const [contracts, setContracts] = useState([]);
+  const [selectedMarketKey, setSelectedMarketKey] = useState('');
+  const [selectedAssetId, setSelectedAssetId] = useState('');
+  const [terminalData, setTerminalData] = useState(null);
+  const [selectedSnapshotTimestamp, setSelectedSnapshotTimestamp] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState('');
+  const [lastUpdated, setLastUpdated] = useState('');
+  const terminalDataRef = useRef(null);
+
+  useEffect(() => {
+    terminalDataRef.current = terminalData;
+  }, [terminalData]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadContracts = async () => {
+      try {
+        setError('');
+        setIsLoading(true);
+        const payload = await requestJson(`/v1/markets/contracts?limit=${CONTRACT_LIMIT}`);
+        if (cancelled) return;
+
+        const nextContracts = Array.isArray(payload?.data) ? payload.data : [];
+        setContracts(nextContracts);
+        setIsLoading(false);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err.message || 'Failed to load market sessions');
+        setIsLoading(false);
+      }
+    };
+
+    loadContracts();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const marketGroups = useMemo(() => groupContractsByMarket(contracts), [contracts]);
+
+  useEffect(() => {
+    if (!marketGroups.length) {
+      setSelectedMarketKey('');
+      return;
+    }
+
+    setSelectedMarketKey((current) => (
+      current && marketGroups.some((group) => group.key === current)
+        ? current
+        : marketGroups[0].key
+    ));
+  }, [marketGroups]);
+
+  const activeMarketGroup = useMemo(
+    () => marketGroups.find((group) => group.key === selectedMarketKey) || null,
+    [marketGroups, selectedMarketKey]
+  );
+
+  useEffect(() => {
+    if (!activeMarketGroup) {
+      setSelectedAssetId('');
+      return;
+    }
+
+    setSelectedAssetId((current) => (
+      current && activeMarketGroup.contracts.some((contract) => contract.assetId === current)
+        ? current
+        : (pickDefaultContract(activeMarketGroup.contracts)?.assetId || activeMarketGroup.contracts[0]?.assetId || '')
+    ));
+  }, [activeMarketGroup]);
+
+  const activeContract = useMemo(() => {
+    if (!activeMarketGroup) {
+      return terminalData?.contract || null;
+    }
+
+    return (
+      activeMarketGroup.contracts.find((contract) => contract.assetId === selectedAssetId) ||
+      pickDefaultContract(activeMarketGroup.contracts) ||
+      terminalData?.contract ||
+      null
+    );
+  }, [activeMarketGroup, selectedAssetId, terminalData]);
+
+  useEffect(() => {
+    if (!activeContract?.marketId || !activeContract?.assetId) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const loadTerminalData = async () => {
+      try {
+        setError('');
+        if (terminalDataRef.current) {
+          setIsRefreshing(true);
+        } else {
+          setIsLoading(true);
+        }
+
+        const params = new URLSearchParams({
+          market_id: activeContract.marketId,
+          asset_id: activeContract.assetId,
+          limit: String(SAMPLE_LIMIT),
+        });
+        const payload = await requestJson(`/v1/markets/terminal?${params.toString()}`);
+        if (cancelled) return;
+
+        const nextPayload = payload;
+        const series = Array.isArray(nextPayload?.series) ? nextPayload.series : [];
+        setTerminalData(nextPayload);
+        setSelectedSnapshotTimestamp((current) => (
+          current && series.some((point) => point.timestamp === current)
+            ? current
+            : (series[series.length - 1]?.timestamp || '')
+        ));
+        setLastUpdated(new Date().toLocaleTimeString());
+        setIsLoading(false);
+        setIsRefreshing(false);
+      } catch (err) {
+        if (cancelled) return;
+        setError(err.message || 'Failed to load terminal data');
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    };
+
+    loadTerminalData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeContract?.marketId, activeContract?.assetId]);
+
+  const activeSeries = Array.isArray(terminalData?.series) ? terminalData.series : [];
+  const selectedSnapshotIndex = useMemo(() => {
+    if (!activeSeries.length) {
+      return 0;
+    }
+
+    const index = activeSeries.findIndex((point) => point.timestamp === selectedSnapshotTimestamp);
+    return index >= 0 ? index : activeSeries.length - 1;
+  }, [activeSeries, selectedSnapshotTimestamp]);
+
+  const selectedSnapshot = activeSeries[selectedSnapshotIndex] || terminalData?.latest || null;
+  const oracle = terminalData?.oracle || {};
+  const oracleSeries = Array.isArray(oracle?.series) ? oracle.series : [];
+  const activeMarketWindow = useMemo(
+    () => getMarketWindowFromContract(activeContract || terminalData?.contract),
+    [activeContract, terminalData]
+  );
+  const selectedOraclePoint = findNearestOraclePoint(oracleSeries, selectedSnapshot?.timestamp);
+  const fallbackOraclePoint = selectedOraclePoint || oracleSeries[oracleSeries.length - 1] || null;
+  const selectedOracleValue = fallbackOraclePoint?.value ?? oracle?.latest ?? null;
+  const selectedOracleTimestamp = fallbackOraclePoint?.timestamp ?? oracle?.timestamp ?? null;
+  const selectedOracleLabel = selectedSnapshot?.timestamp ? 'BTC @ snap' : 'BTC spot';
+  const selectedImbalancePct = (selectedSnapshot?.imbalance ?? null) === null
+    ? null
+    : Number(selectedSnapshot.imbalance) * 100;
+  const isDownOutcome = String(activeContract?.tokenName || '').trim().toLowerCase() === 'down';
+  const tone = isDownOutcome
+    ? { base: THEME.down, soft: THEME.downSoft, glow: THEME.downGlow }
+    : { base: THEME.up, soft: THEME.upSoft, glow: THEME.upGlow };
+
+  if (isLoading && !terminalData && !error) {
+    return (
+      <div className="loading-shell" style={{ '--tone': tone.base }}>
+        <style>{TERMINAL_STYLES}</style>
+        <div className="loading-card">
+          <div className="spinner" />
+          <div className="eyebrow">Terminal Sync</div>
+          <div style={{ marginTop: 10, fontFamily: "'Space Grotesk', 'DM Sans', sans-serif", fontSize: 26 }}>
+            Loading market board
+          </div>
+          <div style={{ marginTop: 10, color: THEME.muted, maxWidth: 340, lineHeight: 1.6 }}>
+            Pulling the session list and market snapshots for the selected contract.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!marketGroups.length && !error) {
+    return (
+      <div
+        className="terminal-shell"
+        style={{
+          '--tone': tone.base,
+          '--tone-soft': tone.soft,
+          '--tone-glow': tone.glow,
+        }}
+      >
+        <style>{TERMINAL_STYLES}</style>
+        <header className="terminal-topbar">
+          <div className="terminal-topbar-left">
+            <Logo size={14} />
+            <Tag color={tone.base}>NO SESSIONS</Tag>
+          </div>
+          <div className="terminal-topbar-right">
+            <Btn variant="ghost" onClick={() => window.location.href = 'menu.html'}>Exit terminal</Btn>
+          </div>
+        </header>
+        <main className="terminal-main">
+          <div className="terminal-frame">
+            <aside className="terminal-sidebar">
+              <div className="sidebar-inner">
+                <div className="sidebar-shell">
+                  <div className="eyebrow">Up / Down Market Monitor</div>
+                  <div className="sidebar-title">No market sessions</div>
+                  <div className="sidebar-copy">
+                    The contracts endpoint returned no active up/down markets for the terminal right now.
+                  </div>
+                </div>
+              </div>
+            </aside>
+            <section className="terminal-content">
+              <div className="content-stack">
+                <EmptyState
+                  title="No market sessions available"
+                  message="Once the service starts returning active contract pairs, they will appear in the left sidebar and the workspace here will populate."
+                  height={420}
+                />
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="terminal-shell"
+      style={{
+        '--tone': tone.base,
+        '--tone-soft': tone.soft,
+        '--tone-glow': tone.glow,
+      }}
+    >
+      <style>{TERMINAL_STYLES}</style>
+
+      <header className="terminal-topbar">
+        <div className="terminal-topbar-left">
+          <Logo size={14} />
+          <Tag color={tone.base}>{isRefreshing ? 'SYNCING' : 'LIVE TERMINAL'}</Tag>
+          <Tag color={THEME.ice}>{activeMarketGroup?.timeLabel || 'Session'}</Tag>
+        </div>
+
+        <div className="terminal-topbar-right">
+          <div className="status-card">
+            <div className="status-label">Last update</div>
+            <div className="status-value">{lastUpdated || 'Waiting...'}</div>
+          </div>
+          <Btn variant="ghost" onClick={() => window.location.href = 'menu.html'}>Exit terminal</Btn>
+        </div>
+      </header>
+
+      <main className="terminal-main">
+        <div className="terminal-frame">
+          <aside className="terminal-sidebar">
+            <div className="sidebar-inner">
+              <div className="sidebar-shell">
+                <div className="eyebrow">Up / Down Market Monitor</div>
+                <div className="sidebar-title">
+                  {activeMarketGroup?.title || 'Choose a market window'}
+                </div>
+                <div className="sidebar-copy">
+                  Pick the session, switch between the paired outcomes, then use the shared scrubber to inspect the overlay chart and order-book state together.
+                </div>
+                <div className="sidebar-tags">
+                  <Tag color={tone.base}>{activeContract?.tokenName || 'Outcome pending'}</Tag>
+                  <Tag color={THEME.ice}>{activeMarketGroup?.timeLabel || 'No session loaded'}</Tag>
+                  <Tag color={THEME.violet}>{formatResultLogic(oracle?.resultLogic, activeContract?.tokenName)}</Tag>
+                </div>
+              </div>
+
+              <div className="control-card">
+                <div className="control-row">
+                  <div className="control-label">Market time</div>
+                  <div className="control-hint">{marketGroups.length} sessions loaded</div>
+                </div>
+                <div className="select-shell">
+                  <select
+                    className="market-select"
+                    value={selectedMarketKey}
+                    onChange={(event) => {
+                      setSelectedMarketKey(event.target.value);
+                      setSelectedAssetId('');
+                    }}
+                  >
+                    {marketGroups.map((group) => (
+                      <option key={group.key} value={group.key}>
+                        {group.timeLabel}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <SnapshotScrubberCard
+                selectedSnapshot={selectedSnapshot}
+                selectedSnapshotIndex={selectedSnapshotIndex}
+                activeSeries={activeSeries}
+                selectedOracleValue={selectedOracleValue}
+                selectedImbalancePct={selectedImbalancePct}
+                tone={tone}
+                onSelectTimestamp={setSelectedSnapshotTimestamp}
+              />
+
+              <div className="control-card">
+                <div className="control-row">
+                  <div className="control-label">Outcome</div>
+                  <div className="control-hint">Click Up or Down</div>
+                </div>
+                <div className="outcome-grid">
+                  {(activeMarketGroup?.contracts || []).map((contract) => {
+                    const isActive = contract.assetId === activeContract?.assetId;
+                    return (
+                      <button
+                        key={makeContractKey(contract)}
+                        type="button"
+                        className={`outcome-button ${isActive ? 'is-active' : 'is-inactive'}`}
+                        onClick={() => setSelectedAssetId(contract.assetId)}
+                      >
+                        <div className="outcome-kicker">{contract.marketId}</div>
+                        <div className="outcome-name">{contract.tokenName || 'Outcome'}</div>
+                        <div className="outcome-copy">
+                          {contract.tokenName === 'Up'
+                            ? 'Tracks the contract for a higher BTC finish at the session close.'
+                            : 'Tracks the contract for a lower BTC finish at the session close.'}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <section className="terminal-content">
+            <div className="content-stack">
+              {error ? <div className="alert-banner">{error}</div> : null}
+
+              <section className="summary-strip">
+                <SummaryStat
+                  label="Mid @ snap"
+                  value={formatContractPrice(selectedSnapshot?.midPrice)}
+                  sub={selectedSnapshot?.timestamp ? formatTimestamp(selectedSnapshot.timestamp, { compact: true }) : 'No snapshot'}
+                  color={tone.base}
+                />
+                <SummaryStat
+                  label={selectedOracleLabel}
+                  value={formatCurrency(selectedOracleValue, 0)}
+                  sub={selectedOracleTimestamp ? formatTimestamp(selectedOracleTimestamp, { compact: true }) : 'Latest oracle'}
+                  color={THEME.ice}
+                />
+                <SummaryStat
+                  label="Spread"
+                  value={formatSpread(selectedSnapshot?.spread)}
+                  sub="Best ask minus best bid"
+                  color={THEME.violet}
+                />
+                <SummaryStat
+                  label="Imbalance"
+                  value={formatSignedPercent(selectedImbalancePct, 1)}
+                  sub="Positive leans bid, vice versa"
+                  color={Number(selectedSnapshot?.imbalance) >= 0 ? THEME.up : THEME.down}
+                />
+                <SummaryStat
+                  label="Strike"
+                  value={formatCurrency(oracle?.strikePrice, 0)}
+                  sub={oracle?.rangeStart ? `Opened ${formatWindowTimestamp(oracle.rangeStart)}` : 'No strike window'}
+                  color={THEME.sun}
+                />
+                <SummaryStat
+                  label="Resolve"
+                  value={formatCurrency(oracle?.resolvePrice, 0)}
+                  sub={formatResultLogic(oracle?.resultLogic, activeContract?.tokenName)}
+                  color={THEME.violet}
+                />
+              </section>
+
+              <section className="workspace-grid">
+                <section className="terminal-panel panel-fill">
+                  <div className="panel-header">
+                    <div>
+                      <div className="eyebrow">Mid Price / BTC Overlay</div>
+                      <div className="panel-title">{activeContract?.label || 'Contract view'}</div>
+                      <div className="panel-copy">
+                        Left axis tracks contract mid and theoretical price. Right axis tracks BTC spot, strike, and resolve price. The time window is clipped to the known session start and end.
+                      </div>
+                    </div>
+                    <Tag color={tone.base}>{selectedSnapshot?.timestamp ? formatTimestamp(selectedSnapshot.timestamp, { compact: true }) : 'Waiting'}</Tag>
+                  </div>
+
+                  <div className="chart-meta">
+                    <div className="chart-legend">
+                      <span className="legend-item" style={{ color: tone.base }}>
+                        <span className="legend-line" />
+                        Contract mid
+                      </span>
+                      <span className="legend-item" style={{ color: THEME.ice }}>
+                        <span className="legend-line is-dashed" />
+                        Theo price
+                      </span>
+                      <span className="legend-item" style={{ color: THEME.sun }}>
+                        <span className="legend-line" />
+                        BTC spot
+                      </span>
+                      <span className="legend-item" style={{ color: THEME.sun }}>
+                        <span className="legend-line is-dashed" />
+                        BTC strike
+                      </span>
+                      <span className="legend-item" style={{ color: THEME.violet }}>
+                        <span className="legend-line is-dotted" />
+                        Resolve
+                      </span>
+                    </div>
+
+                    <div className="snapshot-meta">
+                      <Tag color={THEME.sun}>
+                        {selectedOracleValue !== null && selectedOracleValue !== undefined
+                          ? `${selectedOracleLabel} ${formatCurrency(selectedOracleValue, 0)}`
+                          : 'No BTC reference'}
+                      </Tag>
+                      <Tag color={THEME.ice}>
+                        {selectedSnapshot?.theoreticalPrice !== null && selectedSnapshot?.theoreticalPrice !== undefined
+                          ? `Theo ${formatContractPrice(selectedSnapshot.theoreticalPrice)}`
+                          : 'No theo'}
+                      </Tag>
+                      <Tag color={tone.base}>{activeSeries.length} market samples</Tag>
+                    </div>
+                  </div>
+
+                  <div className="chart-shell">
+                    <PriceOverlayChart
+                      marketSeries={activeSeries}
+                      oracleSeries={oracleSeries}
+                      marketWindow={activeMarketWindow}
+                      selectedTimestamp={selectedSnapshot?.timestamp}
+                      strikePrice={oracle?.strikePrice}
+                      resolvePrice={oracle?.resolvePrice}
+                      toneColor={tone.base}
+                    />
+                  </div>
+                </section>
+
+                <section className="board-grid">
+                  <section className="terminal-panel panel-fill">
+                    <div className="panel-header">
+                      <div>
+                        <div className="eyebrow">Bid / Ask Depth</div>
+                        <div className="panel-title">L1 at the spread, deeper levels step outward</div>
+                        <div className="panel-copy">
+                          Best bid and best ask stay closest to center. Deeper levels spread outward from the current snapshot selected in the sidebar scrubber.
+                        </div>
+                      </div>
+                      <Tag color={tone.base}>{selectedSnapshot?.timestamp ? formatTimestamp(selectedSnapshot.timestamp, { compact: true }) : 'No snapshot'}</Tag>
+                    </div>
+
+                    <OrderBookPanel snapshot={selectedSnapshot} />
+                  </section>
+
+                  <section className="terminal-panel panel-fill">
+                    <div className="panel-header">
+                      <div>
+                        <div className="eyebrow">Imbalance Snapshot</div>
+                        <div className="panel-title">Pressure and flow at the selected market point</div>
+                        <div className="panel-copy">
+                          This compact module stays aligned with the bid/ask depth view for the currently selected snapshot.
+                        </div>
+                      </div>
+                      <Tag color={Number(selectedSnapshot?.imbalance) >= 0 ? THEME.up : THEME.down}>
+                        {formatSignedPercent(selectedImbalancePct, 1)}
+                      </Tag>
+                    </div>
+
+                    <ImbalanceSnapshotPanel snapshot={selectedSnapshot} />
+                  </section>
+                </section>
+
+                <section className="terminal-panel panel-fill">
+                  <div className="panel-header">
+                    <div>
+                      <div className="eyebrow">Imbalance History</div>
+                      <div className="panel-title">Pressure track for the selected session</div>
+                      <div className="panel-copy">
+                        This line chart uses the same session window as the overlay above, so it stops exactly at the market start and end.
+                      </div>
+                    </div>
+                    <Tag color={Number(selectedSnapshot?.imbalance) >= 0 ? THEME.up : THEME.down}>
+                      {formatSignedPercent(selectedImbalancePct, 1)}
+                    </Tag>
+                  </div>
+
+                  <div className="imbalance-shell">
+                    <ImbalanceHistoryChart
+                      series={activeSeries}
+                      marketWindow={activeMarketWindow}
+                      selectedTimestamp={selectedSnapshot?.timestamp}
+                    />
+                  </div>
+                </section>
+              </section>
+            </div>
+          </section>
+        </div>
+      </main>
     </div>
   );
 };

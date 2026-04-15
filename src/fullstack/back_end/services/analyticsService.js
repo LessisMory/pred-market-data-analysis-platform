@@ -150,12 +150,12 @@ const normalizeDataPayload = (payload) => {
   return payload;
 };
 
-exports.getChainlinkPrices = async ({ symbol, start, end, limit }) => {
+exports.getChainlinkPrices = async ({ symbol, start, end, latest, limit }) => {
   const payload = await requestJson({
     serviceName: 'data_service',
     baseUrl: dataService.baseUrl,
     path: dataService.paths.chainlinkPrices,
-    query: { symbol, start, end, limit },
+    query: { symbol, start, end, latest, limit },
   });
 
   return payload;
@@ -181,6 +181,17 @@ exports.getMarkets = async ({ slug, closed, limit, offset }) => {
   });
 
   return normalizeListPayload(payload, ['rows', 'markets', 'results']);
+};
+
+exports.getMarketDepthVolumeChart = async ({ marketId, assetId, limit }) => {
+  const payload = await requestJson({
+    serviceName: 'data_service',
+    baseUrl: dataService.baseUrl,
+    path: dataService.paths.marketDepthVolumeChart,
+    query: { market_id: marketId, asset_id: assetId, limit },
+  });
+
+  return payload;
 };
 
 exports.getTrades = async ({ market, takerOnly, limit, offset }) => {

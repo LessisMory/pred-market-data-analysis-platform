@@ -1075,6 +1075,7 @@ SELECT
   meta.asset_id,
   meta.market_name,
   meta.token_name,
+  meta.market_end_ts,
   strike_ref.btc_value AS strike_price,
   resolve_ref.btc_value AS resolve_price,
   if(
@@ -1567,6 +1568,7 @@ CREATE TABLE analytics.`15m_btc_updown_order_book`
   result_logic String,
   btc_price_minus_strike Nullable(Float64),
   l1_passive_mid_price Nullable(Float64),
+  theoretical_price Nullable(Float64),
   best_price_spread Nullable(Float64),
   orderbook_imbalance Nullable(Float64)
 )
@@ -1582,172 +1584,300 @@ WITH
   exp(-0.5) AS weight_l2,
   exp(-1.0) AS weight_l3,
   exp(-1.5) AS weight_l4,
-  exp(-2.0) AS weight_l5
+  exp(-2.0) AS weight_l5,
+  0.0 AS risk_free_rate,
+  0.0 AS dividend_yield,
+  31540000.0 AS seconds_in_year,
+  sqrt(2.0) AS sqrt_two
 SELECT
-  book.slug AS slug,
-  book.market AS market,
-  book.asset_id AS asset_id,
-  book.timestamp AS timestamp,
-  trades.buy_trade_vwap AS buy_trade_vwap,
-  coalesce(trades.buy_trade_size, 0.0) AS buy_trade_size,
-  coalesce(trades.buy_trade_count, toUInt64(0)) AS buy_trade_count,
-  coalesce(trades.buy_trade_nominal_value, 0.0) AS buy_trade_nominal_value,
-  trades.sell_trade_vwap AS sell_trade_vwap,
-  coalesce(trades.sell_trade_size, 0.0) AS sell_trade_size,
-  coalesce(trades.sell_trade_count, toUInt64(0)) AS sell_trade_count,
-  coalesce(trades.sell_trade_nominal_value, 0.0) AS sell_trade_nominal_value,
-  book.`bid_L1_price` AS `bid_L1_price`,
-  book.`bid_L1_size` AS `bid_L1_size`,
-  book.`bid_L2_price` AS `bid_L2_price`,
-  book.`bid_L2_size` AS `bid_L2_size`,
-  book.`bid_L3_price` AS `bid_L3_price`,
-  book.`bid_L3_size` AS `bid_L3_size`,
-  book.`bid_L4_price` AS `bid_L4_price`,
-  book.`bid_L4_size` AS `bid_L4_size`,
-  book.`bid_L5_price` AS `bid_L5_price`,
-  book.`bid_L5_size` AS `bid_L5_size`,
-  book.`ask_L1_price` AS `ask_L1_price`,
-  book.`ask_L1_size` AS `ask_L1_size`,
-  book.`ask_L2_price` AS `ask_L2_price`,
-  book.`ask_L2_size` AS `ask_L2_size`,
-  book.`ask_L3_price` AS `ask_L3_price`,
-  book.`ask_L3_size` AS `ask_L3_size`,
-  book.`ask_L4_price` AS `ask_L4_price`,
-  book.`ask_L4_size` AS `ask_L4_size`,
-  book.`ask_L5_price` AS `ask_L5_price`,
-  book.`ask_L5_size` AS `ask_L5_size`,
-  btc_now.btc_value AS btc_value,
-  btc_now.btc_receive_timestamp AS btc_receive_timestamp,
-  btc_now.btc_rv AS btc_rv,
-  meta.market_name AS market_name,
-  meta.token_name AS token_name,
-  meta.strike_price AS strike_price,
-  meta.resolve_price AS resolve_price,
-  meta.result_logic AS result_logic,
+  scored.slug AS slug,
+  scored.market AS market,
+  scored.asset_id AS asset_id,
+  scored.timestamp AS timestamp,
+  scored.buy_trade_vwap AS buy_trade_vwap,
+  scored.buy_trade_size AS buy_trade_size,
+  scored.buy_trade_count AS buy_trade_count,
+  scored.buy_trade_nominal_value AS buy_trade_nominal_value,
+  scored.sell_trade_vwap AS sell_trade_vwap,
+  scored.sell_trade_size AS sell_trade_size,
+  scored.sell_trade_count AS sell_trade_count,
+  scored.sell_trade_nominal_value AS sell_trade_nominal_value,
+  scored.`bid_L1_price` AS `bid_L1_price`,
+  scored.`bid_L1_size` AS `bid_L1_size`,
+  scored.`bid_L2_price` AS `bid_L2_price`,
+  scored.`bid_L2_size` AS `bid_L2_size`,
+  scored.`bid_L3_price` AS `bid_L3_price`,
+  scored.`bid_L3_size` AS `bid_L3_size`,
+  scored.`bid_L4_price` AS `bid_L4_price`,
+  scored.`bid_L4_size` AS `bid_L4_size`,
+  scored.`bid_L5_price` AS `bid_L5_price`,
+  scored.`bid_L5_size` AS `bid_L5_size`,
+  scored.`ask_L1_price` AS `ask_L1_price`,
+  scored.`ask_L1_size` AS `ask_L1_size`,
+  scored.`ask_L2_price` AS `ask_L2_price`,
+  scored.`ask_L2_size` AS `ask_L2_size`,
+  scored.`ask_L3_price` AS `ask_L3_price`,
+  scored.`ask_L3_size` AS `ask_L3_size`,
+  scored.`ask_L4_price` AS `ask_L4_price`,
+  scored.`ask_L4_size` AS `ask_L4_size`,
+  scored.`ask_L5_price` AS `ask_L5_price`,
+  scored.`ask_L5_size` AS `ask_L5_size`,
+  scored.btc_value AS btc_value,
+  scored.btc_receive_timestamp AS btc_receive_timestamp,
+  scored.btc_rv AS btc_rv,
+  scored.market_name AS market_name,
+  scored.token_name AS token_name,
+  scored.strike_price AS strike_price,
+  scored.resolve_price AS resolve_price,
+  scored.result_logic AS result_logic,
+  scored.btc_price_minus_strike AS btc_price_minus_strike,
+  scored.l1_passive_mid_price AS l1_passive_mid_price,
   if(
-    isNull(btc_now.btc_value) OR isNull(meta.strike_price) OR btc_now.btc_value <= 0 OR meta.strike_price <= 0,
+    isNull(scored.btc_value) OR isNull(scored.strike_price) OR isNull(scored.token_name)
+    OR scored.btc_value <= 0 OR scored.strike_price <= 0,
     CAST(NULL, 'Nullable(Float64)'),
-    round(btc_now.btc_value - meta.strike_price, 4)
-  ) AS btc_price_minus_strike,
-  if(
-    isNull(book.`bid_L1_price`) OR isNull(book.`ask_L1_price`) OR isNull(book.`bid_L1_size`) OR isNull(book.`ask_L1_size`)
-    OR (book.`bid_L1_size` + book.`ask_L1_size`) <= 0,
-    CAST(NULL, 'Nullable(Float64)'),
-    round(
-      (
-        book.`ask_L1_price` * book.`bid_L1_size`
-        + book.`bid_L1_price` * book.`ask_L1_size`
-      ) / (book.`bid_L1_size` + book.`ask_L1_size`),
-      4
+    if(
+      isNull(scored.time_to_expiry_years),
+      CAST(NULL, 'Nullable(Float64)'),
+      if(
+        scored.time_to_expiry_years <= 0,
+        round(
+          if(
+            lowerUTF8(scored.token_name) = 'up',
+            if(scored.btc_value > scored.strike_price, 1.0, 0.0),
+            if(
+              lowerUTF8(scored.token_name) = 'down',
+              if(scored.btc_value < scored.strike_price, 1.0, 0.0),
+              CAST(NULL, 'Nullable(Float64)')
+            )
+          ),
+          6
+        ),
+        if(
+          isNull(scored.norm_cdf_d2),
+          CAST(NULL, 'Nullable(Float64)'),
+          round(
+            least(
+              greatest(
+                if(
+                  lowerUTF8(scored.token_name) = 'up',
+                  exp(-risk_free_rate * scored.time_to_expiry_years) * scored.norm_cdf_d2,
+                  if(
+                    lowerUTF8(scored.token_name) = 'down',
+                    exp(-risk_free_rate * scored.time_to_expiry_years) * (1.0 - scored.norm_cdf_d2),
+                    CAST(NULL, 'Nullable(Float64)')
+                  )
+                ),
+                0.0
+              ),
+              1.0
+            ),
+            6
+          )
+        )
+      )
     )
-  ) AS l1_passive_mid_price,
-  if(
-    isNull(book.`ask_L1_price`) OR isNull(book.`bid_L1_price`),
-    CAST(NULL, 'Nullable(Float64)'),
-    round(book.`ask_L1_price` - book.`bid_L1_price`, 4)
-  ) AS best_price_spread,
-  if(
-    (
-      coalesce(book.`bid_L1_size`, 0.0)
-      + weight_l2 * coalesce(book.`bid_L2_size`, 0.0)
-      + weight_l3 * coalesce(book.`bid_L3_size`, 0.0)
-      + weight_l4 * coalesce(book.`bid_L4_size`, 0.0)
-      + weight_l5 * coalesce(book.`bid_L5_size`, 0.0)
-      + coalesce(book.`ask_L1_size`, 0.0)
-      + weight_l2 * coalesce(book.`ask_L2_size`, 0.0)
-      + weight_l3 * coalesce(book.`ask_L3_size`, 0.0)
-      + weight_l4 * coalesce(book.`ask_L4_size`, 0.0)
-      + weight_l5 * coalesce(book.`ask_L5_size`, 0.0)
-    ) <= 0,
-    CAST(NULL, 'Nullable(Float64)'),
-    round(
-      (
-        (
-          coalesce(book.`bid_L1_size`, 0.0)
-          + weight_l2 * coalesce(book.`bid_L2_size`, 0.0)
-          + weight_l3 * coalesce(book.`bid_L3_size`, 0.0)
-          + weight_l4 * coalesce(book.`bid_L4_size`, 0.0)
-          + weight_l5 * coalesce(book.`bid_L5_size`, 0.0)
-        )
-        - (
-          coalesce(book.`ask_L1_size`, 0.0)
-          + weight_l2 * coalesce(book.`ask_L2_size`, 0.0)
-          + weight_l3 * coalesce(book.`ask_L3_size`, 0.0)
-          + weight_l4 * coalesce(book.`ask_L4_size`, 0.0)
-          + weight_l5 * coalesce(book.`ask_L5_size`, 0.0)
-        )
-      ) / (
-        (
-          coalesce(book.`bid_L1_size`, 0.0)
-          + weight_l2 * coalesce(book.`bid_L2_size`, 0.0)
-          + weight_l3 * coalesce(book.`bid_L3_size`, 0.0)
-          + weight_l4 * coalesce(book.`bid_L4_size`, 0.0)
-          + weight_l5 * coalesce(book.`bid_L5_size`, 0.0)
-        )
-        + (
-          coalesce(book.`ask_L1_size`, 0.0)
-          + weight_l2 * coalesce(book.`ask_L2_size`, 0.0)
-          + weight_l3 * coalesce(book.`ask_L3_size`, 0.0)
-          + weight_l4 * coalesce(book.`ask_L4_size`, 0.0)
-          + weight_l5 * coalesce(book.`ask_L5_size`, 0.0)
-        )
-      ),
-      4
-    )
-  ) AS orderbook_imbalance
+  ) AS theoretical_price,
+  scored.best_price_spread AS best_price_spread,
+  scored.orderbook_imbalance AS orderbook_imbalance
 FROM
 (
   SELECT
-    toUInt8(1) AS asof_key,
-    slug,
-    market,
-    asset_id,
-    timestamp,
-    `bid_L1_price`,
-    `bid_L1_size`,
-    `bid_L2_price`,
-    `bid_L2_size`,
-    `bid_L3_price`,
-    `bid_L3_size`,
-    `bid_L4_price`,
-    `bid_L4_size`,
-    `bid_L5_price`,
-    `bid_L5_size`,
-    `ask_L1_price`,
-    `ask_L1_size`,
-    `ask_L2_price`,
-    `ask_L2_size`,
-    `ask_L3_price`,
-    `ask_L3_size`,
-    `ask_L4_price`,
-    `ask_L4_size`,
-    `ask_L5_price`,
-    `ask_L5_size`
-  FROM analytics.btc_updown_15m_book_1s
-  ORDER BY timestamp, slug, asset_id
-) AS book
-ASOF LEFT JOIN
-(
-  SELECT
-    toUInt8(1) AS asof_key,
-    chainlink_second,
-    btc_value,
-    btc_receive_timestamp,
-    btc_rv
-  FROM analytics.v_btc_second_featured
-  ORDER BY asof_key, chainlink_second
-) AS btc_now
-ON book.asof_key = btc_now.asof_key
-AND book.timestamp >= btc_now.chainlink_second
-LEFT JOIN analytics.v_btc_updown_15m_trade_1s AS trades
-  ON book.slug = trades.slug
- AND book.market = trades.market
- AND book.asset_id = trades.asset_id
- AND book.timestamp = trades.timestamp
-LEFT JOIN analytics.v_btc_updown_15m_token_chainlink_meta AS meta
-  ON book.slug = meta.slug
- AND book.market = meta.market
- AND book.asset_id = meta.asset_id
+    enriched.*,
+    if(
+      isNull(enriched.binary_d2),
+      CAST(NULL, 'Nullable(Float64)'),
+      0.5 * (1.0 + erf(enriched.binary_d2 / sqrt_two))
+    ) AS norm_cdf_d2
+  FROM
+  (
+    SELECT
+      base.*,
+      if(
+        isNull(base.btc_value) OR isNull(base.strike_price) OR isNull(base.btc_rv)
+        OR base.btc_value <= 0 OR base.strike_price <= 0 OR base.btc_rv <= 0
+        OR isNull(base.time_to_expiry_years) OR base.time_to_expiry_years <= 0,
+        CAST(NULL, 'Nullable(Float64)'),
+        (
+          log(base.btc_value / base.strike_price)
+          + (risk_free_rate - dividend_yield - 0.5 * pow(base.btc_rv, 2)) * base.time_to_expiry_years
+        ) / (base.btc_rv * sqrt(base.time_to_expiry_years))
+      ) AS binary_d2
+    FROM
+    (
+      SELECT
+        book.slug AS slug,
+        book.market AS market,
+        book.asset_id AS asset_id,
+        book.timestamp AS timestamp,
+        trades.buy_trade_vwap AS buy_trade_vwap,
+        coalesce(trades.buy_trade_size, 0.0) AS buy_trade_size,
+        coalesce(trades.buy_trade_count, toUInt64(0)) AS buy_trade_count,
+        coalesce(trades.buy_trade_nominal_value, 0.0) AS buy_trade_nominal_value,
+        trades.sell_trade_vwap AS sell_trade_vwap,
+        coalesce(trades.sell_trade_size, 0.0) AS sell_trade_size,
+        coalesce(trades.sell_trade_count, toUInt64(0)) AS sell_trade_count,
+        coalesce(trades.sell_trade_nominal_value, 0.0) AS sell_trade_nominal_value,
+        book.`bid_L1_price` AS `bid_L1_price`,
+        book.`bid_L1_size` AS `bid_L1_size`,
+        book.`bid_L2_price` AS `bid_L2_price`,
+        book.`bid_L2_size` AS `bid_L2_size`,
+        book.`bid_L3_price` AS `bid_L3_price`,
+        book.`bid_L3_size` AS `bid_L3_size`,
+        book.`bid_L4_price` AS `bid_L4_price`,
+        book.`bid_L4_size` AS `bid_L4_size`,
+        book.`bid_L5_price` AS `bid_L5_price`,
+        book.`bid_L5_size` AS `bid_L5_size`,
+        book.`ask_L1_price` AS `ask_L1_price`,
+        book.`ask_L1_size` AS `ask_L1_size`,
+        book.`ask_L2_price` AS `ask_L2_price`,
+        book.`ask_L2_size` AS `ask_L2_size`,
+        book.`ask_L3_price` AS `ask_L3_price`,
+        book.`ask_L3_size` AS `ask_L3_size`,
+        book.`ask_L4_price` AS `ask_L4_price`,
+        book.`ask_L4_size` AS `ask_L4_size`,
+        book.`ask_L5_price` AS `ask_L5_price`,
+        book.`ask_L5_size` AS `ask_L5_size`,
+        btc_now.btc_value AS btc_value,
+        btc_now.btc_receive_timestamp AS btc_receive_timestamp,
+        btc_now.btc_rv AS btc_rv,
+        meta.market_name AS market_name,
+        meta.token_name AS token_name,
+        meta.strike_price AS strike_price,
+        meta.resolve_price AS resolve_price,
+        meta.result_logic AS result_logic,
+        if(
+          isNull(meta.market_end_ts),
+          CAST(NULL, 'Nullable(Float64)'),
+          greatest(toFloat64(dateDiff('millisecond', book.timestamp, meta.market_end_ts)), 0.0) / 1000.0 / seconds_in_year
+        ) AS time_to_expiry_years,
+        if(
+          isNull(btc_now.btc_value) OR isNull(meta.strike_price) OR btc_now.btc_value <= 0 OR meta.strike_price <= 0,
+          CAST(NULL, 'Nullable(Float64)'),
+          round(btc_now.btc_value - meta.strike_price, 4)
+        ) AS btc_price_minus_strike,
+        if(
+          isNull(book.`bid_L1_price`) OR isNull(book.`ask_L1_price`) OR isNull(book.`bid_L1_size`) OR isNull(book.`ask_L1_size`)
+          OR (book.`bid_L1_size` + book.`ask_L1_size`) <= 0,
+          CAST(NULL, 'Nullable(Float64)'),
+          round(
+            (
+              book.`ask_L1_price` * book.`bid_L1_size`
+              + book.`bid_L1_price` * book.`ask_L1_size`
+            ) / (book.`bid_L1_size` + book.`ask_L1_size`),
+            4
+          )
+        ) AS l1_passive_mid_price,
+        if(
+          isNull(book.`ask_L1_price`) OR isNull(book.`bid_L1_price`),
+          CAST(NULL, 'Nullable(Float64)'),
+          round(book.`ask_L1_price` - book.`bid_L1_price`, 4)
+        ) AS best_price_spread,
+        if(
+          (
+            coalesce(book.`bid_L1_size`, 0.0)
+            + weight_l2 * coalesce(book.`bid_L2_size`, 0.0)
+            + weight_l3 * coalesce(book.`bid_L3_size`, 0.0)
+            + weight_l4 * coalesce(book.`bid_L4_size`, 0.0)
+            + weight_l5 * coalesce(book.`bid_L5_size`, 0.0)
+            + coalesce(book.`ask_L1_size`, 0.0)
+            + weight_l2 * coalesce(book.`ask_L2_size`, 0.0)
+            + weight_l3 * coalesce(book.`ask_L3_size`, 0.0)
+            + weight_l4 * coalesce(book.`ask_L4_size`, 0.0)
+            + weight_l5 * coalesce(book.`ask_L5_size`, 0.0)
+          ) <= 0,
+          CAST(NULL, 'Nullable(Float64)'),
+          round(
+            (
+              (
+                coalesce(book.`bid_L1_size`, 0.0)
+                + weight_l2 * coalesce(book.`bid_L2_size`, 0.0)
+                + weight_l3 * coalesce(book.`bid_L3_size`, 0.0)
+                + weight_l4 * coalesce(book.`bid_L4_size`, 0.0)
+                + weight_l5 * coalesce(book.`bid_L5_size`, 0.0)
+              )
+              - (
+                coalesce(book.`ask_L1_size`, 0.0)
+                + weight_l2 * coalesce(book.`ask_L2_size`, 0.0)
+                + weight_l3 * coalesce(book.`ask_L3_size`, 0.0)
+                + weight_l4 * coalesce(book.`ask_L4_size`, 0.0)
+                + weight_l5 * coalesce(book.`ask_L5_size`, 0.0)
+              )
+            ) / (
+              (
+                coalesce(book.`bid_L1_size`, 0.0)
+                + weight_l2 * coalesce(book.`bid_L2_size`, 0.0)
+                + weight_l3 * coalesce(book.`bid_L3_size`, 0.0)
+                + weight_l4 * coalesce(book.`bid_L4_size`, 0.0)
+                + weight_l5 * coalesce(book.`bid_L5_size`, 0.0)
+              )
+              + (
+                coalesce(book.`ask_L1_size`, 0.0)
+                + weight_l2 * coalesce(book.`ask_L2_size`, 0.0)
+                + weight_l3 * coalesce(book.`ask_L3_size`, 0.0)
+                + weight_l4 * coalesce(book.`ask_L4_size`, 0.0)
+                + weight_l5 * coalesce(book.`ask_L5_size`, 0.0)
+              )
+            ),
+            4
+          )
+        ) AS orderbook_imbalance
+      FROM
+      (
+        SELECT
+          toUInt8(1) AS asof_key,
+          slug,
+          market,
+          asset_id,
+          timestamp,
+          `bid_L1_price`,
+          `bid_L1_size`,
+          `bid_L2_price`,
+          `bid_L2_size`,
+          `bid_L3_price`,
+          `bid_L3_size`,
+          `bid_L4_price`,
+          `bid_L4_size`,
+          `bid_L5_price`,
+          `bid_L5_size`,
+          `ask_L1_price`,
+          `ask_L1_size`,
+          `ask_L2_price`,
+          `ask_L2_size`,
+          `ask_L3_price`,
+          `ask_L3_size`,
+          `ask_L4_price`,
+          `ask_L4_size`,
+          `ask_L5_price`,
+          `ask_L5_size`
+        FROM analytics.btc_updown_15m_book_1s
+        ORDER BY timestamp, slug, asset_id
+      ) AS book
+      ASOF LEFT JOIN
+      (
+        SELECT
+          toUInt8(1) AS asof_key,
+          chainlink_second,
+          btc_value,
+          btc_receive_timestamp,
+          btc_rv
+        FROM analytics.v_btc_second_featured
+        ORDER BY asof_key, chainlink_second
+      ) AS btc_now
+      ON book.asof_key = btc_now.asof_key
+      AND book.timestamp >= btc_now.chainlink_second
+      LEFT JOIN analytics.v_btc_updown_15m_trade_1s AS trades
+        ON book.slug = trades.slug
+       AND book.market = trades.market
+       AND book.asset_id = trades.asset_id
+       AND book.timestamp = trades.timestamp
+      LEFT JOIN analytics.v_btc_updown_15m_token_chainlink_meta AS meta
+        ON book.slug = meta.slug
+       AND book.market = meta.market
+       AND book.asset_id = meta.asset_id
+    ) AS base
+  ) AS enriched
+) AS scored
 ;
 
 

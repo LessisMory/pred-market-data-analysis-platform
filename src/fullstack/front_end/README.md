@@ -123,11 +123,12 @@ All three keys are cleared on Sign Out.
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/v1/markets/active` | List of active Polymarket contracts. |
-| `WS`  | `wss://.../stream/market-pulse` | **[CRITICAL]** Live BTC price, Polymarket UP/DN probabilities. |
-| `WS`  | `wss://.../stream/orderbook` | **[CRITICAL]** L2 order book depth updates. |
+| `GET` | `/v1/markets/contracts` | Terminal-selectable market contracts from `data_service`. |
+| `GET` | `/v1/markets/terminal?market_id=<id>&asset_id=<id>` | Terminal-ready payload combining market chart data and latest BTC Chainlink prices. |
 
 Terminal note:
 - the terminal is charting-only in the current build
+- the current terminal uses REST polling, not WebSocket push
 - there is no active backend order-execution route in the current build
 
 ### Wallet  `/v1/wallet`

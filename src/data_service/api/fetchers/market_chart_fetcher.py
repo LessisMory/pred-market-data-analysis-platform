@@ -30,7 +30,11 @@ EXPECTED_COLUMNS = [
     *DEPTH_COLUMNS,
     "market_name",
     "token_name",
+    "strike_price",
+    "resolve_price",
+    "result_logic",
     "l1_passive_mid_price",
+    "theoretical_price",
     "best_price_spread",
     "orderbook_imbalance",
 ]
@@ -187,7 +191,11 @@ def fetch_market_depth_volume_chart(
             ask_L5_size,
             market_name,
             token_name,
+            strike_price,
+            resolve_price,
+            result_logic,
             l1_passive_mid_price,
+            theoretical_price,
             best_price_spread,
             orderbook_imbalance
         FROM {table_name}

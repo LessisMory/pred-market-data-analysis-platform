@@ -72,6 +72,43 @@ Core components:
 4. Internal writer persists transformed batches into PostgreSQL tables.
 5. Analytics backend serves curated data products to the React frontend.
 
+## Terminal Integration Notes
+
+The first end-to-end terminal slice now follows:
+
+`frontend -> nginx same-origin -> Node backend -> FastAPI data_service -> ClickHouse`
+
+The browser does not call `data_service` directly. The frontend polls the Node backend, and the backend proxies/composes the FastAPI responses for the terminal UI.
+
+### Startup Order
+
+1. Start the full stack from the repo root with `docker compose up --build`.
+2. If you need Debezium CDC enabled, register the connector after the stack is healthy with `./src/data_service/dbz_init.sh`.
+
+The root compose file now includes the app stack plus the data pipeline services:
+- `db`
+- `data_postgres`
+- `data_initializer`
+- `redis`
+- `inflow_gateway`
+- `kafka`
+- `kafka_bridge`
+- `transform_writer`
+- `debezium`
+- `clickhouse`
+- `data_service_api`
+- `backend`
+- `frontend`
+
+### `DATA_SERVICE_API_BASE_URL`
+
+Use the value that matches how the backend is running:
+
+- Dockerized backend via root `docker-compose.yml`: `http://data_service_api:8000`
+- Host-run backend process: `http://localhost:8000`
+
+The current terminal slice is REST-polling only. It does not use backend WebSocket push yet.
+
 ## API Contracts
 
 OpenAPI spec: `api.yaml`

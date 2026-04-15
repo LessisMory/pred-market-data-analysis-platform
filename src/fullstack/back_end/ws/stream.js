@@ -1,5 +1,6 @@
 const WebSocket = require('ws');
 const { gamma, dataService } = require('../config/upstream');
+const { createPolymarketPriceFeed } = require('./polymarketPriceFeed');
 
 /**
  * WebSocket stream endpoint — wss://.../stream
@@ -19,6 +20,28 @@ const HEARTBEAT_INTERVAL = 30_000; // 30 s
 
 function initWebSocket(server) {
   const wss = new WebSocket.Server({ server, path: '/stream' });
+  const priceFeed = createPolymarketPriceFeed({
+    onPrice: (price) => {
+      if (countSubscribers(wss, 'prices') === 0) {
+        return;
+      }
+
+      broadcast(wss, 'prices', {
+        type: 'prices',
+        timestamp: price.timestamp,
+        data: price,
+      });
+    },
+  });
+
+  const syncLivePrices = () => {
+    if (countSubscribers(wss, 'prices') > 0) {
+      priceFeed.start();
+      return;
+    }
+
+    priceFeed.stop();
+  };
 
   // Track subscriptions per client
   wss.on('connection', (ws) => {
@@ -32,7 +55,7 @@ function initWebSocket(server) {
     ws.on('message', (raw) => {
       let msg;
       try {
-        msg = JSON.parse(raw);
+        msg = JSON.parse(Buffer.isBuffer(raw) ? raw.toString('utf8') : String(raw));
       } catch {
         ws.send(JSON.stringify({ error: 'Invalid JSON' }));
         return;
@@ -43,9 +66,11 @@ function initWebSocket(server) {
       if (action === 'subscribe' && channel) {
         ws.subscriptions.add(channel);
         ws.send(JSON.stringify({ status: 'subscribed', channel }));
+        syncLivePrices();
       } else if (action === 'unsubscribe' && channel) {
         ws.subscriptions.delete(channel);
         ws.send(JSON.stringify({ status: 'unsubscribed', channel }));
+        syncLivePrices();
       } else {
         ws.send(JSON.stringify({ error: 'Unknown action. Use subscribe/unsubscribe.' }));
       }
@@ -53,6 +78,7 @@ function initWebSocket(server) {
 
     ws.on('close', () => {
       ws.subscriptions.clear();
+      syncLivePrices();
     });
 
     // Welcome message
@@ -75,50 +101,33 @@ function initWebSocket(server) {
     });
   }, HEARTBEAT_INTERVAL);
 
-  wss.on('close', () => clearInterval(heartbeat));
+  wss.on('close', () => {
+    clearInterval(heartbeat);
+    priceFeed.stop();
+  });
 
-  // Simulated upstream feed — replace with real upstream WS proxy
   startUpstreamRelay(wss);
 
   return wss;
 }
 
 /**
- * Polls upstream REST endpoints on a short interval and pushes
- * updates to subscribed clients.  Replace with a true upstream
- * WebSocket connection when available.
+ * Streams remaining non-price channels. ClickHouse-backed snapshots stay on a
+ * slower cadence; live BTC prices come directly from Polymarket RTDS.
  */
 function startUpstreamRelay(wss) {
-  const POLL_INTERVAL = 1_000; // 1 s for price ticks, 5 s for depth
+  const CLICKHOUSE_POLL_INTERVAL = 10 * 60 * 1000;
+  const TRADES_POLL_INTERVAL = 1_000;
 
-  // --- Price ticker (1 s) ---
-  const priceTimer = setInterval(async () => {
-    if (countSubscribers(wss, 'prices') === 0) return;
-
-    try {
-      const res = await fetch(
-        `${dataService.baseUrl}${dataService.paths.binancePrices}?limit=1`
-      );
-      if (!res.ok) return;
-      const data = await res.json();
-
-      broadcast(wss, 'prices', {
-        type: 'prices',
-        timestamp: new Date().toISOString(),
-        data,
-      });
-    } catch {
-      // upstream unavailable — skip this tick
-    }
-  }, POLL_INTERVAL);
-
-  // --- Depth snapshots (5 s) ---
+  // --- Depth snapshots (10 min) ---
   const depthTimer = setInterval(async () => {
     if (countSubscribers(wss, 'depth') === 0) return;
 
     try {
+      const end = new Date();
+      const start = new Date(end.getTime() - CLICKHOUSE_POLL_INTERVAL);
       const res = await fetch(
-        `${dataService.baseUrl}${dataService.paths.data}?startTime=${new Date(Date.now() - 5000).toISOString()}&endTime=${new Date().toISOString()}`
+        `${dataService.baseUrl}${dataService.paths.data}?startTime=${start.toISOString()}&endTime=${end.toISOString()}`
       );
       if (!res.ok) return;
       const data = await res.json();
@@ -131,7 +140,7 @@ function startUpstreamRelay(wss) {
     } catch {
       // upstream unavailable — skip this tick
     }
-  }, 5_000);
+  }, CLICKHOUSE_POLL_INTERVAL);
 
   // --- Trades feed (1 s) ---
   const tradesTimer = setInterval(async () => {
@@ -153,11 +162,10 @@ function startUpstreamRelay(wss) {
     } catch {
       // upstream unavailable — skip this tick
     }
-  }, POLL_INTERVAL);
+  }, TRADES_POLL_INTERVAL);
 
   // Clean up on server close
   wss.on('close', () => {
-    clearInterval(priceTimer);
     clearInterval(depthTimer);
     clearInterval(tradesTimer);
   });
