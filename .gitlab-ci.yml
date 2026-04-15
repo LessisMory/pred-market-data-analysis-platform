@@ -3,6 +3,7 @@ include:
 
 stages:
   - test
+  - security
   - build
 
 default:
@@ -164,3 +165,59 @@ data_initialization_build_release:
     IMAGE_NAME: "data-service-data-initialization"
     DOCKERFILE_PATH: "$DATA_INITIALIZATION_DIR/Dockerfile"
     BUILD_CONTEXT: "$DATA_SERVICE_DIR"
+
+security_analysis_owasp_zap:
+  image: docker:24.0.5-cli
+  stage: security
+  rules: *data_service_branch_or_mr_changes
+  services:
+    - name: docker:24.0.5-dind
+      alias: docker
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+    DAST_TARGET_OPENAPI_URL: "http://dast-target:8000/openapi.json"
+  script:
+    - mkdir -p zap-report
+    - export DAST_IMAGE="data-service-api-dast:${CI_COMMIT_SHORT_SHA}"
+    - docker build --pull -f "$API_DIR/Dockerfile" -t "$DAST_IMAGE" "$DATA_SERVICE_DIR"
+    - docker network create dast-net
+    - docker run -d --name dast-target --network dast-net "$DAST_IMAGE"
+    - |
+      for i in $(seq 1 30); do
+        if docker run --rm --network dast-net curlimages/curl:8.8.0 -fsS "$DAST_TARGET_OPENAPI_URL" >/dev/null; then
+          echo "DAST target is ready."
+          break
+        fi
+        if [ "$i" -eq 30 ]; then
+          echo "DAST target did not become ready in time."
+          docker logs dast-target || true
+          exit 1
+        fi
+        sleep 2
+      done
+    - |
+      docker run --rm \
+        --network dast-net \
+        -v "$CI_PROJECT_DIR/zap-report:/zap/wrk:rw" \
+        ghcr.io/zaproxy/zaproxy:stable \
+        zap-api-scan.py \
+          -t "$DAST_TARGET_OPENAPI_URL" \
+          -f openapi \
+          -J zap-report.json \
+          -r zap-report.html \
+          -w zap-report.md
+  after_script:
+    - docker logs dast-target || true
+    - docker rm -f dast-target >/dev/null 2>&1 || true
+    - docker network rm dast-net >/dev/null 2>&1 || true
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - zap-report/zap-report.json
+      - zap-report/zap-report.html
+      - zap-report/zap-report.md
+  allow_failure: true
