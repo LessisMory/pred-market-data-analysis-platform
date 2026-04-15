@@ -314,8 +314,19 @@ window.FirebaseAuthClient = (() => {
 
   async function logout() {
     try {
+      if (!isFirebaseSessionSource()) {
+        return;
+      }
+
+      await init();
+      if (!initData?.enabled) {
+        return;
+      }
+
       const authApi = await auth();
       await authApi.signOut();
+    } catch (err) {
+      console.warn('Failed to sign out from Firebase:', err);
     } finally {
       clearStoredSession();
     }
