@@ -3,8 +3,6 @@ const parseTimeout = (value, fallback) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-// These paths are placeholders for the internal data-service API.
-// Once that service exists, point the env vars at the real host and routes.
 const gamma = {
   baseUrl: process.env.GAMMA_API_BASE_URL || 'https://gamma-api.polymarket.com',
   paths: {
@@ -15,11 +13,13 @@ const gamma = {
 };
 
 const dataService = {
-  baseUrl: process.env.DATA_SERVICE_API_BASE_URL || 'http://192.168.68.86:8000',
+  baseUrl: process.env.DATA_SERVICE_API_BASE_URL || 'http://localhost:8000',
   paths: {
     chainlinkPrices: process.env.DATA_SERVICE_CHAINLINK_PATH || '/chainlink/prices',
     binancePrices: process.env.DATA_SERVICE_BINANCE_PATH || '/prices/binance',
     markets: process.env.DATA_SERVICE_MARKETS_PATH || '/markets',
+    marketDepthVolumeChart:
+      process.env.DATA_SERVICE_MARKET_DEPTH_VOLUME_CHART_PATH || '/markets/depth-volume-chart',
     data: process.env.DATA_SERVICE_DATA_PATH || '/data',
   },
 };

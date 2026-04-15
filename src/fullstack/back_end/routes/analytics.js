@@ -5,6 +5,7 @@ const analyticsController = require('../controllers/analyticsController');
 router.get('/prices/chainlink', analyticsController.getChainlinkPrices);
 router.get('/prices/binance', analyticsController.getBinancePrices);
 router.get('/markets', analyticsController.getMarkets);
+router.get('/markets/depth-volume-chart', analyticsController.getMarketDepthVolumeChart);
 router.get('/trades', analyticsController.getTrades);
 router.get('/events', analyticsController.getEvents);
 router.get('/series', analyticsController.getSeries);

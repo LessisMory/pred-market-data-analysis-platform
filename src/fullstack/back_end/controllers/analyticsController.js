@@ -22,6 +22,16 @@ const parseOptionalString = (value) => {
   return trimmed ? trimmed : undefined;
 };
 
+const parseRequiredString = (value, fieldName) => {
+  const candidate = parseOptionalString(value);
+
+  if (!candidate) {
+    throw createValidationError(`${fieldName} is required`);
+  }
+
+  return candidate;
+};
+
 const parseStringList = (value) => {
   if (value === undefined || value === null) {
     return undefined;
@@ -95,6 +105,20 @@ const parseRequiredDate = (value, fieldName) => {
   return parsed.toISOString();
 };
 
+const parseOptionalDate = (value, fieldName) => {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  const parsed = new Date(firstValue(value));
+
+  if (Number.isNaN(parsed.getTime())) {
+    throw createValidationError(`${fieldName} must be a valid ISO date/time`);
+  }
+
+  return parsed.toISOString();
+};
+
 exports.getChainlinkPrices = async (req, res, next) => {
   try {
     const symbol = parseOptionalString(req.query.symbol);
@@ -102,10 +126,33 @@ exports.getChainlinkPrices = async (req, res, next) => {
       throw createValidationError('symbol is required');
     }
 
+    const latest = parseBoolean(req.query.latest, 'latest') ?? false;
+    const start = parseOptionalDate(req.query.start, 'start');
+    const end = parseOptionalDate(req.query.end, 'end');
+
+    if (latest) {
+      if (start || end) {
+        throw createValidationError('latest cannot be combined with start or end');
+      }
+    } else {
+      if (!start && !end) {
+        throw createValidationError('Provide start and end, or use latest=true');
+      }
+
+      if (!start || !end) {
+        throw createValidationError('start and end must be provided together');
+      }
+
+      if (new Date(start) >= new Date(end)) {
+        throw createValidationError('start must be earlier than end');
+      }
+    }
+
     const data = await analyticsService.getChainlinkPrices({
       symbol,
-      start: parseRequiredDate(req.query.start, 'start'),
-      end: parseRequiredDate(req.query.end, 'end'),
+      start,
+      end,
+      latest,
       limit: parseInteger(req.query.limit, 'limit', { defaultValue: 1000, min: 1, max: 10000 }),
     });
     res.json(data);
@@ -134,6 +181,19 @@ exports.getMarkets = async (req, res, next) => {
       closed: parseBoolean(req.query.closed, 'closed'),
       limit: parseInteger(req.query.limit, 'limit', { defaultValue: DEFAULT_LIMIT, min: 1, max: MAX_LIMIT }),
       offset: parseInteger(req.query.offset, 'offset', { defaultValue: 0, min: 0 }),
+    });
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getMarketDepthVolumeChart = async (req, res, next) => {
+  try {
+    const data = await analyticsService.getMarketDepthVolumeChart({
+      marketId: parseRequiredString(req.query.market_id, 'market_id'),
+      assetId: parseRequiredString(req.query.asset_id, 'asset_id'),
+      limit: parseInteger(req.query.limit, 'limit', { defaultValue: DEFAULT_LIMIT, min: 1, max: 10000 }),
     });
     res.json(data);
   } catch (err) {

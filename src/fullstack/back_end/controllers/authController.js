@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 const config = require('../config/env');
 const { syncFirebaseUser } = require('../services/firebaseAuthSync');
+const { firebaseAdminEnabled } = require('../services/firebaseAdmin');
 
 // ─── Helpers ────────────────────────────────────────────────
 
@@ -87,14 +88,24 @@ function firebaseClientConfigured() {
   );
 }
 
+function firebaseClientEnabled() {
+  if (!firebaseClientConfigured()) {
+    return false;
+  }
+
+  return !config.isProd || firebaseAdminEnabled();
+}
+
 // ─── Frontend required endpoints ────────────────────────────
 
 exports.getClientConfig = (_req, res) => {
+  const enabled = firebaseClientEnabled();
+
   return res.json({
-    enabled: firebaseClientConfigured(),
+    enabled,
     firebase: getFirebaseClientConfig(),
     providers: {
-      google: true,
+      google: enabled,
     },
   });
 };

@@ -15,5 +15,7 @@ const authenticate = require('../middleware/authenticate');
  *       502: { description: Failed to fetch from upstream }
  */
 router.get('/active', authenticate, marketsController.getActiveMarkets);
+router.get('/contracts', authenticate, marketsController.getContracts);
+router.get('/terminal', authenticate, marketsController.getTerminalMarketData);
 
 module.exports = router;

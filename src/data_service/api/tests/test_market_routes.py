@@ -120,7 +120,11 @@ def test_market_depth_volume_chart_endpoint_returns_chart_ready_response(
                 "ask_L2_size": 140.0,
                 "market_name": "Bitcoin Up or Down",
                 "token_name": "Up",
+                "strike_price": 94321.0,
+                "resolve_price": 95001.0,
+                "result_logic": "yes",
                 "l1_passive_mid_price": 0.44,
+                "theoretical_price": 0.58,
                 "best_price_spread": 0.01,
                 "orderbook_imbalance": 0.53,
             }
@@ -146,6 +150,9 @@ def test_market_depth_volume_chart_endpoint_returns_chart_ready_response(
         "asset_id": "123",
         "market_name": "Bitcoin Up or Down",
         "token_name": "Up",
+        "strike_price": 94321.0,
+        "resolve_price": 95001.0,
+        "result_logic": "yes",
         "data": [
             {
                 "slug": "btc-updown-15m-1764565200",
@@ -200,6 +207,7 @@ def test_market_depth_volume_chart_endpoint_returns_chart_ready_response(
                     "total_ask_size": 142.72,
                 },
                 "mid_price": 0.44,
+                "theoretical_price": 0.58,
                 "spread": 0.01,
                 "imbalance": 0.53,
             }
@@ -230,7 +238,7 @@ def test_market_depth_volume_chart_endpoint_uses_default_limit(
     markets_route.fetch_market_depth_volume_chart.assert_called_once_with(
         market_id="0xmarket",
         asset_id="123",
-        limit=100,
+        limit=1000,
     )
 
 

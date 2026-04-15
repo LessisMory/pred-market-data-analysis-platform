@@ -35,6 +35,7 @@ def _make_chart_row(**overrides: object) -> dict[str, object]:
             "market_name": "Bitcoin Up or Down",
             "token_name": "Up",
             "l1_passive_mid_price": 0.44,
+            "theoretical_price": 0.58,
             "best_price_spread": 0.01,
             "orderbook_imbalance": 0.53,
         }

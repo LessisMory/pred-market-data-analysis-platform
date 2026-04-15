@@ -10,6 +10,10 @@ window.FirebaseAuthClient = (() => {
     return localStorage.getItem('ob_auth_source') || '';
   }
 
+  function hasStoredJwt() {
+    return Boolean(localStorage.getItem('jwt_token'));
+  }
+
   function isFirebaseSessionSource(source = getStoredAuthSource()) {
     return source === 'firebase' || source === 'google.com' || source === 'phone';
   }
@@ -169,6 +173,10 @@ window.FirebaseAuthClient = (() => {
         return;
       }
 
+      if (hasStoredJwt() && !isFirebaseSessionSource()) {
+        return;
+      }
+
       try {
         const token = await user.getIdToken();
         localStorage.setItem('jwt_token', token);
@@ -279,7 +287,15 @@ window.FirebaseAuthClient = (() => {
 
   async function ensureSession() {
     try {
+      if (hasStoredJwt() && !isFirebaseSessionSource()) {
+        return null;
+      }
+
       await init();
+      if (!initData?.enabled) {
+        return null;
+      }
+
       const currentUser = (await auth()).currentUser || (await waitForAuthState());
 
       if (!currentUser) {
