@@ -1,0 +1,145 @@
+"filename", "language", "Shell Script", "Python", "Markdown", "Docker", "pip requirements", "YAML", "MS SQL", "JavaScript", "HTML", "Properties", "PostCSS", "JSON", "toml", "comment", "blank", "total"
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/Dockerfile", "Docker", 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 17
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/README.md", "Markdown", 0, 0, 258, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 85, 343
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/__init__.py", "Python", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/api.py", "Python", 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 13
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/db/__init__.py", "Python", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/db/client.py", "Python", 0, 104, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 11, 33, 148
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/docker-compose.yaml", "YAML", 0, 0, 0, 0, 0, 23, 0, 0, 0, 0, 0, 0, 0, 0, 2, 25
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/fetchers/__init__.py", "Python", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/fetchers/chainlink_fetcher.py", "Python", 0, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 35, 20, 124
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/fetchers/market_chart_fetcher.py", "Python", 0, 162, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33, 23, 218
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/requirements.txt", "pip requirements", 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 6
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/routes/__init__.py", "Python", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/routes/chainlink.py", "Python", 0, 138, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 26, 165
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/routes/health.py", "Python", 0, 27, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 10, 38
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/routes/markets.py", "Python", 0, 209, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 48, 259
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/tests/__init__.py", "Python", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/tests/conftest.py", "Python", 0, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 8, 24
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/tests/test_chainlink_fetcher.py", "Python", 0, 162, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 38, 200
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/tests/test_db_client.py", "Python", 0, 144, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 186
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/tests/test_market_chart_fetcher.py", "Python", 0, 165, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 26, 191
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/tests/test_market_routes.py", "Python", 0, 284, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 326
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/api/tests/test_routes.py", "Python", 0, 369, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 74, 443
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/Dockerfile", "Docker", 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 5
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/data_initialization/Dockerfile", "Docker", 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 6, 16
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/data_initialization/data_initialization_testing.ipynb", "JSON", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 215, 0, 0, 1, 216
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/data_initialization/main.py", "Python", 0, 769, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 43, 115, 927
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/data_initialization/requirements.txt", "pip requirements", 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 4
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/docker-compose.yaml", "YAML", 0, 0, 0, 0, 0, 58, 0, 0, 0, 0, 0, 0, 0, 0, 4, 62
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/init/load_schema.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1, 3
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/init/setup_cdc.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 22, 0, 0, 0, 0, 0, 0, 3, 4, 29
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/setup.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 5, 5, 24
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/binance_prices.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 0, 2, 16
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/chainlink_prices.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 0, 2, 16
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/comments.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 3, 10
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/events.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 0, 2, 7, 52
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/markets.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 62, 0, 0, 0, 0, 0, 0, 10, 8, 80
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/order_book_snapshots.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 2, 4, 17
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/order_book_trades.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0, 2, 15
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/order_book_updates.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 2, 4, 19
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/series.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 15, 0, 0, 0, 0, 0, 0, 0, 3, 18
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/tag_list.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 5
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/tags.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 1, 9
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/tokens.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0, 1, 7
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/trades.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0, 1, 14
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/database/schema/tables/users.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 1, 9
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/dbz_init.sh", "Shell Script", 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 9, 79
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/inflow_gateway/Dockerfile", "Docker", 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 14
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/inflow_gateway/docker-compose.yaml", "YAML", 0, 0, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 0, 0, 4, 32
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/inflow_gateway/pyproject.toml", "toml", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 0, 3, 20
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/inflow_gateway/requirements.txt", "pip requirements", 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 15
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/inflow_gateway/stream.py", "Python", 0, 461, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 31, 107, 599
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/inflow_gateway/tests/test_stream.py", "Python", 0, 725, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 193, 918
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/shared/__init__.py", "Python", 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 7, 20
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/shared/subscriber.py", "Python", 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 12, 90
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/transform_layer/Dockerfile", "Docker", 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 7, 19
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/transform_layer/config.py", "Python", 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 19, 96
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/transform_layer/docker-compose.yaml", "YAML", 0, 0, 0, 0, 0, 136, 0, 0, 0, 0, 0, 0, 0, 8, 8, 152
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/transform_layer/kafka_bridge.py", "Python", 0, 133, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 26, 160
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/transform_layer/requirements.txt", "pip requirements", 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 4
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/transform_layer/template.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 1782, 0, 0, 0, 0, 0, 0, 2, 100, 1884
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/transform_layer/tests/conftest.py", "Python", 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 8
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/transform_layer/tests/test_transform_writer.py", "Python", 0, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 22, 85
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/data_service/transform_layer/transform_writer.py", "Python", 0, 470, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 62, 537
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/Dockerfile", "Docker", 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 18
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/__tests__/admin.test.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 300, 0, 0, 0, 0, 0, 24, 78, 402
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/__tests__/auth.test.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 199, 0, 0, 0, 0, 0, 11, 45, 255
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/__tests__/authController.test.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 60, 0, 0, 0, 0, 0, 0, 11, 71
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/__tests__/billing.test.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 92, 0, 0, 0, 0, 0, 7, 23, 122
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/__tests__/legacyAnalytics.test.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 45, 0, 0, 0, 0, 0, 0, 10, 55
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/__tests__/markets.test.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 181, 0, 0, 0, 0, 0, 0, 35, 216
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/__tests__/marketsService.test.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 173, 0, 0, 0, 0, 0, 0, 12, 185
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/__tests__/user.test.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 416, 0, 0, 0, 0, 0, 30, 91, 537
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/__tests__/wallet.test.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 68, 0, 0, 0, 0, 0, 7, 18, 93
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/app.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 85, 0, 0, 0, 0, 0, 14, 21, 120
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/config/env.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 50, 0, 0, 0, 0, 0, 0, 10, 60
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/config/swagger.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 46, 0, 0, 0, 0, 0, 0, 3, 49
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/config/upstream.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 4, 32
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/controllers/adminController.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 534, 0, 0, 0, 0, 0, 0, 96, 630
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/controllers/analyticsController.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 216, 0, 0, 0, 0, 0, 0, 49, 265
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/controllers/authController.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 247, 0, 0, 0, 0, 0, 9, 48, 304
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/controllers/billingController.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 74, 0, 0, 0, 0, 0, 6, 16, 96
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/controllers/marketsController.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 75, 0, 0, 0, 0, 0, 1, 20, 96
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/controllers/userController.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 506, 0, 0, 0, 0, 0, 4, 94, 604
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/controllers/walletController.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0, 0, 0, 5, 12, 71
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/db.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 3, 17
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/db/00_extensions.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 1, 1, 4
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/db/01_users.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 51, 0, 0, 0, 0, 0, 0, 5, 8, 64
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/db/02_activity.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 2, 5, 27
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/db/03_subscriptions.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 28, 0, 0, 0, 0, 0, 0, 2, 6, 36
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/db/04_admin.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 18, 0, 0, 0, 0, 0, 0, 1, 4, 23
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/db/05_events.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 1, 3, 18
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/db/06_metrics.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 1, 1, 11
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/db/07_roles.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 2, 3, 16
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/db/08_firebase_auth.sql", "MS SQL", 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 3, 8
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/db/init.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 32, 0, 0, 0, 0, 0, 4, 5, 41
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/middleware/authenticate.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 0, 7, 50
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/middleware/rateLimit.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 22, 0, 0, 0, 0, 0, 3, 6, 31
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/middleware/requireAdmin.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 4, 14
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/middleware/requireSubscription.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 6, 26
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/package.json", "JSON", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33, 0, 0, 1, 34
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/routes/admin.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 23, 3, 40
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/routes/analytics.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0, 0, 0, 0, 3, 15
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/routes/auth.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 66, 7, 84
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/routes/billing.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 21, 3, 30
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/routes/markets.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 11, 3, 22
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/routes/transactions.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 6, 0, 0, 0, 0, 0, 17, 3, 26
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/routes/user.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 15, 0, 0, 0, 0, 0, 49, 5, 69
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/routes/wallet.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 29, 4, 40
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/services/analyticsService.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 197, 0, 0, 0, 0, 0, 0, 45, 242
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/services/firebaseAdmin.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 0, 9, 52
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/services/firebaseAuthSync.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 169, 0, 0, 0, 0, 0, 0, 22, 191
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/services/firebaseToken.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 15, 79
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/services/marketsService.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 170, 0, 0, 0, 0, 0, 0, 29, 199
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/start.sh", "Shell Script", 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 3, 9
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/back_end/ws/stream.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0, 0, 0, 29, 29, 186
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/Dockerfile", "Docker", 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 11
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/README.md", "Markdown", 0, 0, 145, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 38, 183
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/admin.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 21, 0, 0, 0, 0, 0, 1, 22
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/admin.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 678, 0, 0, 0, 0, 0, 11, 73, 762
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/firebase-client.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 287, 0, 0, 0, 0, 0, 0, 53, 340
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/history.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 21, 0, 0, 0, 0, 0, 1, 22
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/history.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 194, 0, 0, 0, 0, 0, 15, 26, 235
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/index.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 21, 0, 0, 0, 0, 0, 1, 22
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/index.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 131, 0, 0, 0, 0, 0, 0, 25, 156
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/log_design.md", "Markdown", 0, 0, 121, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 36, 157
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/login.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 21, 0, 0, 0, 0, 0, 1, 22
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/login.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 118, 0, 0, 0, 0, 0, 0, 25, 143
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/membership.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 21, 0, 0, 0, 0, 0, 1, 22
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/membership.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 179, 0, 0, 0, 0, 0, 1, 21, 201
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/menu.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 21, 0, 0, 0, 0, 0, 1, 22
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/menu.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 179, 0, 0, 0, 0, 0, 8, 27, 214
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/nginx.conf", "Properties", 0, 0, 0, 0, 0, 0, 0, 0, 0, 24, 0, 0, 0, 4, 6, 34
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/profile.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 21, 0, 0, 0, 0, 0, 1, 22
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/profile.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 703, 0, 0, 0, 0, 0, 0, 80, 783
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/proxy_params.conf", "Properties", 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 1, 8
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/register.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 21, 0, 0, 0, 0, 0, 1, 22
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/register.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 186, 0, 0, 0, 0, 0, 0, 32, 218
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/shared.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 97, 0, 0, 0, 0, 0, 0, 6, 103
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/styles.css", "PostCSS", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 57, 0, 0, 13, 15, 85
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/terminal.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 24, 0, 0, 0, 0, 0, 1, 25
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/terminal.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 1913, 0, 0, 0, 0, 0, 0, 142, 2055
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/wallet.html", "HTML", 0, 0, 0, 0, 0, 0, 0, 0, 21, 0, 0, 0, 0, 0, 1, 22
+"/Users/mike/Duke/fintech512/final_project/pred_market_data_platform/src/fullstack/front_end/wallet.js", "JavaScript", 0, 0, 0, 0, 0, 0, 0, 239, 0, 0, 0, 0, 0, 5, 29, 273
+"Total", "-", 73, 4643, 524, 55, 25, 245, 2210, 9344, 213, 31, 57, 248, 17, 659, 2865, 21209
